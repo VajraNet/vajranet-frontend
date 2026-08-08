@@ -347,7 +347,7 @@ export default function App() {
         )}
 
         {/* Main Scrollable Content Canvas */}
-        <main className="flex-1 p-4 lg:p-6 overflow-y-auto max-w-7xl">
+        <main className="flex-1 p-4 lg:p-6 overflow-y-auto w-full">
           
           {/* ===================== GOVERNMENT COMMAND MODE ===================== */}
           {portalMode === 'GOVERNMENT' && (
