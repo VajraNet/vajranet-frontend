@@ -10,3 +10,21 @@ export const apiClient = axios.create({
   },
   timeout: 10000,
 });
+
+// Automatic response interceptor to unwrap VajraNet standard { success: true, data: ... } envelope
+apiClient.interceptors.response.use(
+  (response) => {
+    if (
+      response.data &&
+      typeof response.data === 'object' &&
+      'data' in response.data &&
+      response.data.success !== undefined
+    ) {
+      return { ...response, data: response.data.data };
+    }
+    return response;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);

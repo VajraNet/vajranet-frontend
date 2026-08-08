@@ -24,7 +24,11 @@ export function ResourceHospitals() {
   async function fetchHospitals() {
     try {
       const data = await governmentApi.getHospitals();
-      setHospitals(data);
+      if (Array.isArray(data) && data.length > 0) {
+        setHospitals(data);
+      } else {
+        throw new Error('Empty hospitals list');
+      }
     } catch (err) {
       // Demo state fallback
       setHospitals([
@@ -63,11 +67,11 @@ export function ResourceHospitals() {
     try {
       await governmentApi.updateHospital(hospital.id, { is_emergency_open: updatedStatus });
       setHospitals((prev) =>
-        prev.map((h) => (h.id === hospital.id ? { ...h, is_emergency_open: updatedStatus } : h))
+        (Array.isArray(prev) ? prev : []).map((h) => (h.id === hospital.id ? { ...h, is_emergency_open: updatedStatus } : h))
       );
     } catch (err) {
       setHospitals((prev) =>
-        prev.map((h) => (h.id === hospital.id ? { ...h, is_emergency_open: updatedStatus } : h))
+        (Array.isArray(prev) ? prev : []).map((h) => (h.id === hospital.id ? { ...h, is_emergency_open: updatedStatus } : h))
       );
     }
   }
@@ -82,7 +86,7 @@ export function ResourceHospitals() {
         available_icu_beds: newIcu,
       });
       setHospitals((prev) =>
-        prev.map((h) =>
+        (Array.isArray(prev) ? prev : []).map((h) =>
           h.id === hospital.id
             ? { ...h, available_beds: newBeds, available_icu_beds: newIcu }
             : h
@@ -90,7 +94,7 @@ export function ResourceHospitals() {
       );
     } catch (err) {
       setHospitals((prev) =>
-        prev.map((h) =>
+        (Array.isArray(prev) ? prev : []).map((h) =>
           h.id === hospital.id
             ? { ...h, available_beds: newBeds, available_icu_beds: newIcu }
             : h
@@ -117,13 +121,13 @@ export function ResourceHospitals() {
 
     try {
       const created = await governmentApi.createHospital(payload);
-      setHospitals((prev) => [...prev, created]);
+      setHospitals((prev) => [...(Array.isArray(prev) ? prev : []), created]);
     } catch (err) {
       const mockCreated: ResourceHospital = {
         ...payload,
         id: `hosp-${Date.now()}`,
       };
-      setHospitals((prev) => [...prev, mockCreated]);
+      setHospitals((prev) => [...(Array.isArray(prev) ? prev : []), mockCreated]);
     } finally {
       setShowAddModal(false);
       setName('');
@@ -132,6 +136,8 @@ export function ResourceHospitals() {
       setContactPhone('');
     }
   }
+
+  const safeHospitals = Array.isArray(hospitals) ? hospitals : [];
 
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-lg p-5 space-y-6">
@@ -156,80 +162,85 @@ export function ResourceHospitals() {
         <p className="text-xs text-slate-400">Loading healthcare network telemetry...</p>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {hospitals.map((hospital) => (
-            <div
-              key={hospital.id}
-              className="bg-slate-950 border border-slate-800 rounded-lg p-4 space-y-3"
-            >
-              <div className="flex items-center justify-between gap-2">
-                <div>
-                  <h3 className="text-sm font-bold text-slate-100">{hospital.name}</h3>
-                  <p className="text-xs text-slate-400">
-                    📍 {hospital.location.zone} — {hospital.location.address || 'Address registered'}
-                  </p>
-                </div>
-                <button
-                  onClick={() => handleToggleEmergency(hospital)}
-                  className={`text-xs font-bold px-2.5 py-1 rounded border transition ${
-                    hospital.is_emergency_open
-                      ? 'bg-emerald-950 text-emerald-400 border-emerald-800 hover:bg-emerald-900'
-                      : 'bg-rose-950 text-rose-400 border-rose-800 hover:bg-rose-900'
-                  }`}
-                >
-                  {hospital.is_emergency_open ? 'INTAKE OPEN' : 'INTAKE FULL'}
-                </button>
-              </div>
+          {safeHospitals.map((hospital) => {
+            const hZone = hospital.location?.zone || (hospital as any).zone || 'Zone 1';
+            const hAddress = hospital.location?.address || (hospital as any).address || '';
 
-              {/* Bed Metrics Grid */}
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="bg-slate-900/80 border border-slate-800 rounded p-2.5">
-                  <span className="text-slate-400 font-medium">General Beds</span>
-                  <p className="text-base font-extrabold text-emerald-400 mt-0.5">
-                    {hospital.available_beds} <span className="text-xs font-normal text-slate-500">/ {hospital.total_beds}</span>
-                  </p>
-                  <div className="flex items-center gap-1 mt-2">
-                    <button
-                      onClick={() => handleBedChange(hospital, -1, 0)}
-                      className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-0.5 rounded text-xs"
-                    >
-                      -1 Bed
-                    </button>
-                    <button
-                      onClick={() => handleBedChange(hospital, 1, 0)}
-                      className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-0.5 rounded text-xs"
-                    >
-                      +1 Bed
-                    </button>
+            return (
+              <div
+                key={hospital.id}
+                className="bg-slate-950 border border-slate-800 rounded-lg p-4 space-y-3"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-100">{hospital.name}</h3>
+                    <p className="text-xs text-slate-400">
+                      📍 {hZone} — {hAddress || 'Address registered'}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => handleToggleEmergency(hospital)}
+                    className={`text-xs font-bold px-2.5 py-1 rounded border transition ${
+                      hospital.is_emergency_open
+                        ? 'bg-emerald-950 text-emerald-400 border-emerald-800 hover:bg-emerald-900'
+                        : 'bg-rose-950 text-rose-400 border-rose-800 hover:bg-rose-900'
+                    }`}
+                  >
+                    {hospital.is_emergency_open ? 'INTAKE OPEN' : 'INTAKE FULL'}
+                  </button>
+                </div>
+
+                {/* Bed Metrics Grid */}
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="bg-slate-900/80 border border-slate-800 rounded p-2.5">
+                    <span className="text-slate-400 font-medium">General Beds</span>
+                    <p className="text-base font-extrabold text-emerald-400 mt-0.5">
+                      {hospital.available_beds} <span className="text-xs font-normal text-slate-500">/ {hospital.total_beds}</span>
+                    </p>
+                    <div className="flex items-center gap-1 mt-2">
+                      <button
+                        onClick={() => handleBedChange(hospital, -1, 0)}
+                        className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-0.5 rounded text-xs"
+                      >
+                        -1 Bed
+                      </button>
+                      <button
+                        onClick={() => handleBedChange(hospital, 1, 0)}
+                        className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-0.5 rounded text-xs"
+                      >
+                        +1 Bed
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-900/80 border border-slate-800 rounded p-2.5">
+                    <span className="text-slate-400 font-medium">ICU Beds</span>
+                    <p className="text-base font-extrabold text-cyan-400 mt-0.5">
+                      {hospital.available_icu_beds} <span className="text-xs font-normal text-slate-500">/ {hospital.total_icu_beds}</span>
+                    </p>
+                    <div className="flex items-center gap-1 mt-2">
+                      <button
+                        onClick={() => handleBedChange(hospital, 0, -1)}
+                        className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-0.5 rounded text-xs"
+                      >
+                        -1 ICU
+                      </button>
+                      <button
+                        onClick={() => handleBedChange(hospital, 0, 1)}
+                        className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-0.5 rounded text-xs"
+                      >
+                        +1 ICU
+                      </button>
+                    </div>
                   </div>
                 </div>
 
-                <div className="bg-slate-900/80 border border-slate-800 rounded p-2.5">
-                  <span className="text-slate-400 font-medium">ICU Beds</span>
-                  <p className="text-base font-extrabold text-cyan-400 mt-0.5">
-                    {hospital.available_icu_beds} <span className="text-xs font-normal text-slate-500">/ {hospital.total_icu_beds}</span>
-                  </p>
-                  <div className="flex items-center gap-1 mt-2">
-                    <button
-                      onClick={() => handleBedChange(hospital, 0, -1)}
-                      className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-0.5 rounded text-xs"
-                    >
-                      -1 ICU
-                    </button>
-                    <button
-                      onClick={() => handleBedChange(hospital, 0, 1)}
-                      className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-0.5 rounded text-xs"
-                    >
-                      +1 ICU
-                    </button>
-                  </div>
-                </div>
+                <p className="text-xs text-slate-500 pt-1 border-t border-slate-900">
+                  Helpline: <span className="text-slate-300">{hospital.contact_phone || 'N/A'}</span>
+                </p>
               </div>
-
-              <p className="text-xs text-slate-500 pt-1 border-t border-slate-900">
-                Helpline: <span className="text-slate-300">{hospital.contact_phone || 'N/A'}</span>
-              </p>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

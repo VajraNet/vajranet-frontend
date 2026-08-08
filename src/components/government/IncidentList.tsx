@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Incident, DisasterType, SeverityLevel, EmergencyStatus } from '../../types/api';
+import { Incident, EmergencyStatus } from '../../types/api';
 import { governmentApi } from '../../api/government';
 
 export function IncidentList() {
@@ -15,7 +15,11 @@ export function IncidentList() {
   async function fetchIncidents() {
     try {
       const data = await governmentApi.getIncidents();
-      setIncidents(data);
+      if (Array.isArray(data) && data.length > 0) {
+        setIncidents(data);
+      } else {
+        throw new Error('Empty incidents list');
+      }
     } catch (err) {
       // Demo state fallback
       setIncidents([
@@ -56,19 +60,23 @@ export function IncidentList() {
     try {
       await governmentApi.updateIncidentStatus(id, newStatus);
       setIncidents((prev) =>
-        prev.map((item) => (item.id === id ? { ...item, status: newStatus } : item))
+        (Array.isArray(prev) ? prev : []).map((item) => (item.id === id ? { ...item, status: newStatus } : item))
       );
     } catch (err) {
       // Fallback optimistic update
       setIncidents((prev) =>
-        prev.map((item) => (item.id === id ? { ...item, status: newStatus } : item))
+        (Array.isArray(prev) ? prev : []).map((item) => (item.id === id ? { ...item, status: newStatus } : item))
       );
     }
   }
 
-  const filteredIncidents = incidents.filter((inc) => {
-    const matchesType = typeFilter === 'ALL' || inc.disaster_type === typeFilter;
-    const matchesSeverity = severityFilter === 'ALL' || inc.severity === severityFilter;
+  const safeIncidents = Array.isArray(incidents) ? incidents : [];
+
+  const filteredIncidents = safeIncidents.filter((inc) => {
+    const disasterType = inc.disaster_type || (inc as any).type || 'OTHER';
+    const severity = inc.severity || 'MEDIUM';
+    const matchesType = typeFilter === 'ALL' || disasterType === typeFilter;
+    const matchesSeverity = severityFilter === 'ALL' || severity === severityFilter;
     return matchesType && matchesSeverity;
   });
 
@@ -123,67 +131,76 @@ export function IncidentList() {
         {filteredIncidents.length === 0 ? (
           <p className="text-sm text-slate-400 italic">No incidents match the selected filter criteria.</p>
         ) : (
-          filteredIncidents.map((incident) => (
-            <div
-              key={incident.id}
-              className="bg-slate-950/80 border border-slate-800 rounded-lg p-4 flex flex-col md:flex-row md:items-center justify-between gap-4"
-            >
-              <div className="space-y-1.5 max-w-2xl">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs font-bold px-2 py-0.5 rounded bg-slate-800 text-slate-200 border border-slate-700">
-                    {incident.disaster_type}
-                  </span>
-                  <span
-                    className={`text-xs font-bold px-2 py-0.5 rounded border uppercase ${
-                      incident.severity === 'CRITICAL'
-                        ? 'bg-rose-950 text-rose-400 border-rose-800'
-                        : incident.severity === 'HIGH'
-                        ? 'bg-amber-950 text-amber-400 border-amber-800'
-                        : 'bg-slate-900 text-slate-300 border-slate-700'
-                    }`}
-                  >
-                    {incident.severity}
-                  </span>
-                  <span className="text-xs text-slate-500">
-                    Reported: {new Date(incident.reported_at).toLocaleTimeString()}
-                  </span>
+          filteredIncidents.map((incident) => {
+            const disasterType = incident.disaster_type || (incident as any).type || 'OTHER';
+            const severity = incident.severity || 'MEDIUM';
+            const description = incident.description || (incident as any).title || 'Disaster hazard reported';
+            const zone = incident.location?.zone || (incident as any).zone || 'Sector 1';
+            const address = incident.location?.address || (incident as any).address || '';
+            const reportedTime = incident.reported_at ? new Date(incident.reported_at).toLocaleTimeString() : 'Recently';
+
+            return (
+              <div
+                key={incident.id}
+                className="bg-slate-950/80 border border-slate-800 rounded-lg p-4 flex flex-col md:flex-row md:items-center justify-between gap-4"
+              >
+                <div className="space-y-1.5 max-w-2xl">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-bold px-2 py-0.5 rounded bg-slate-800 text-slate-200 border border-slate-700">
+                      {disasterType}
+                    </span>
+                    <span
+                      className={`text-xs font-bold px-2 py-0.5 rounded border uppercase ${
+                        severity === 'CRITICAL'
+                          ? 'bg-rose-950 text-rose-400 border-rose-800'
+                          : severity === 'HIGH'
+                          ? 'bg-amber-950 text-amber-400 border-amber-800'
+                          : 'bg-slate-900 text-slate-300 border-slate-700'
+                      }`}
+                    >
+                      {severity}
+                    </span>
+                    <span className="text-xs text-slate-500">
+                      Reported: {reportedTime}
+                    </span>
+                  </div>
+
+                  <p className="text-sm font-medium text-slate-200">{description}</p>
+
+                  <p className="text-xs text-slate-400">
+                    📍 Zone: <span className="text-slate-300 font-semibold">{zone}</span>
+                    {address && ` (${address})`}
+                  </p>
                 </div>
 
-                <p className="text-sm font-medium text-slate-200">{incident.description}</p>
+                {/* Status & Actions */}
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-semibold px-2.5 py-1 rounded bg-slate-900 border border-slate-800 text-slate-300">
+                    {incident.status || 'REPORTED'}
+                  </span>
 
-                <p className="text-xs text-slate-400">
-                  📍 Zone: <span className="text-slate-300 font-semibold">{incident.location.zone || 'N/A'}</span>
-                  {incident.location.address && ` (${incident.location.address})`}
-                </p>
-              </div>
-
-              {/* Status & Actions */}
-              <div className="flex items-center gap-3">
-                <span className="text-xs font-semibold px-2.5 py-1 rounded bg-slate-900 border border-slate-800 text-slate-300">
-                  {incident.status}
-                </span>
-
-                <div className="flex items-center gap-1.5">
-                  {incident.status !== 'IN_PROGRESS' && incident.status !== 'RESOLVED' && (
-                    <button
-                      onClick={() => handleStatusUpdate(incident.id, 'IN_PROGRESS')}
-                      className="text-xs bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded font-medium transition"
-                    >
-                      Dispatch / In Progress
-                    </button>
-                  )}
-                  {incident.status !== 'RESOLVED' && (
-                    <button
-                      onClick={() => handleStatusUpdate(incident.id, 'RESOLVED')}
-                      className="text-xs bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded font-medium transition"
-                    >
-                      Resolve
-                    </button>
-                  )}
+                  <div className="flex items-center gap-1.5">
+                    {incident.status !== 'IN_PROGRESS' && incident.status !== 'RESOLVED' && (
+                      <button
+                        onClick={() => handleStatusUpdate(incident.id, 'IN_PROGRESS')}
+                        className="text-xs bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded font-medium transition"
+                      >
+                        Dispatch / In Progress
+                      </button>
+                    )}
+                    {incident.status !== 'RESOLVED' && (
+                      <button
+                        onClick={() => handleStatusUpdate(incident.id, 'RESOLVED')}
+                        className="text-xs bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded font-medium transition"
+                      >
+                        Resolve
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
     </div>
