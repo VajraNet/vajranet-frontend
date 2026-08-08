@@ -1,6 +1,6 @@
 import React from 'react';
 
-export type GovtTab = 'SOS' | 'INCIDENTS' | 'ANNOUNCEMENTS' | 'SHELTERS' | 'HOSPITALS' | 'RELIEF';
+export type GovtTab = 'MAP' | 'SOS' | 'INCIDENTS' | 'ANNOUNCEMENTS' | 'SHELTERS' | 'HOSPITALS' | 'RELIEF';
 
 interface CommandHeaderProps {
   activeTab: GovtTab;
@@ -9,6 +9,7 @@ interface CommandHeaderProps {
 
 export function CommandHeader({ activeTab, onTabChange }: CommandHeaderProps) {
   const tabs: { id: GovtTab; label: string }[] = [
+    { id: 'MAP', label: '🗺️ Tactical GIS Map' },
     { id: 'SOS', label: '🚨 Live SOS Signals' },
     { id: 'INCIDENTS', label: '📋 Incident Feed' },
     { id: 'ANNOUNCEMENTS', label: '📢 Public Announcements' },
