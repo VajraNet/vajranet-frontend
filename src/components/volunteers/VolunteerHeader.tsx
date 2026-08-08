@@ -1,11 +1,21 @@
 import React, { useState } from 'react';
 
+export type VolTab = 
+  | 'TASKS' 
+  | 'INCIDENTS' 
+  | 'SHELTERS' 
+  | 'HOSPITALS' 
+  | 'FUNDRAISERS' 
+  | 'RESOURCE_MAPPING' 
+  | 'OFFLINE_SYNC' 
+  | 'PROFILE';
+
 interface VolunteerHeaderProps {
   volunteerName?: string;
   assignedZone?: string;
   role?: string;
   activeTab: string;
-  setActiveTab: (tab: string) => void;
+  setActiveTab: (tab: VolTab) => void;
 }
 
 export function VolunteerHeader({
@@ -17,12 +27,23 @@ export function VolunteerHeader({
 }: VolunteerHeaderProps) {
   const [isOnDuty, setIsOnDuty] = useState(true);
 
+  const tabs: { id: VolTab; label: string }[] = [
+    { id: 'TASKS', label: '📋 Assigned Tasks' },
+    { id: 'INCIDENTS', label: '🚨 Field Incidents' },
+    { id: 'SHELTERS', label: '🏠 Private Shelters' },
+    { id: 'HOSPITALS', label: '🏥 Private Hospitals' },
+    { id: 'FUNDRAISERS', label: '💰 Relief Campaigns' },
+    { id: 'RESOURCE_MAPPING', label: '🗺️ Community Resource Mapping' },
+    { id: 'OFFLINE_SYNC', label: '📡 Mesh & Offline Sync' },
+    { id: 'PROFILE', label: '👤 Profile & Certs' },
+  ];
+
   return (
-    <header className="bg-slate-900 border-b border-slate-800 p-4 lg:p-6 text-slate-100">
+    <header className="bg-slate-900 border border-slate-800 rounded-lg p-4 lg:p-6 text-slate-100 shadow-lg mb-6">
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         {/* Profile & Status */}
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-emerald-950 border border-emerald-700 flex items-center gap-0 justify-center text-emerald-400 font-bold text-base">
+          <div className="w-10 h-10 rounded-full bg-emerald-950 border border-emerald-700 flex items-center justify-center text-emerald-400 font-bold text-base">
             🤝
           </div>
           <div>
@@ -62,36 +83,22 @@ export function VolunteerHeader({
 
       {/* Navigation Tabs */}
       <nav className="flex items-center gap-2 mt-6 overflow-x-auto border-b border-slate-800/60 pb-1 text-xs font-medium">
-        <button
-          onClick={() => setActiveTab('TASKS')}
-          className={`px-3 py-2 rounded-t border-b-2 transition whitespace-nowrap ${
-            activeTab === 'TASKS'
-              ? 'border-emerald-500 text-emerald-400 font-bold bg-slate-800/40'
-              : 'border-transparent text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          📋 Assigned Field Tasks
-        </button>
-        <button
-          onClick={() => setActiveTab('RESOURCE_MAPPING')}
-          className={`px-3 py-2 rounded-t border-b-2 transition whitespace-nowrap ${
-            activeTab === 'RESOURCE_MAPPING'
-              ? 'border-emerald-500 text-emerald-400 font-bold bg-slate-800/40'
-              : 'border-transparent text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          🗺️ Community Resource Mapping
-        </button>
-        <button
-          onClick={() => setActiveTab('OFFLINE_SYNC')}
-          className={`px-3 py-2 rounded-t border-b-2 transition whitespace-nowrap ${
-            activeTab === 'OFFLINE_SYNC'
-              ? 'border-emerald-500 text-emerald-400 font-bold bg-slate-800/40'
-              : 'border-transparent text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          📡 Mesh & Offline Sync Status
-        </button>
+        {tabs.map((tab) => {
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`px-3 py-2 rounded-t border-b-2 transition whitespace-nowrap ${
+                isActive
+                  ? 'border-emerald-500 text-emerald-400 font-bold bg-slate-800/40'
+                  : 'border-transparent text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              {tab.label}
+            </button>
+          );
+        })}
       </nav>
     </header>
   );

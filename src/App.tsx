@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
-import { CommandHeader } from './components/government/CommandHeader';
+
+// Government Components
+import { CommandHeader, GovtTab } from './components/government/CommandHeader';
 import { MetricsOverview } from './components/government/MetricsOverview';
 import { LiveSOSFeed } from './components/government/LiveSOSFeed';
 import { IncidentList } from './components/government/IncidentList';
@@ -8,82 +10,84 @@ import { ResourceShelters } from './components/government/ResourceShelters';
 import { ResourceHospitals } from './components/government/ResourceHospitals';
 import { ResourceRelief } from './components/government/ResourceRelief';
 
-import { VolunteerHeader } from './components/volunteers/VolunteerHeader';
+// Volunteer Components (Import VolTab here)
+import { VolunteerHeader, VolTab } from './components/volunteers/VolunteerHeader';
 import { IncidentResponseBoard } from './components/volunteers/IncidentResponseBoard';
 import { PrivateShelterManager } from './components/volunteers/PrivateShelterManager';
 import { PrivateHospitalManager } from './components/volunteers/PrivateHospitalManager';
 import { ReliefFundraisers } from './components/volunteers/ReliefFundraisers';
 import { VolunteerProfile } from './components/volunteers/VolunteerProfile';
 
-export function App() {
-  const [currentRole, setCurrentRole] = useState<'GOVERNMENT' | 'VOLUNTEER'>('GOVERNMENT');
-  const [govtTab, setGovtTab] = useState<'SOS' | 'INCIDENTS' | 'ANNOUNCEMENTS' | 'SHELTERS' | 'HOSPITALS' | 'RELIEF'>('SOS');
-  const [volunteerTab, setVolunteerTab] = useState<'TASKS' | 'SHELTERS' | 'HOSPITALS' | 'FUNDRAISERS' | 'PROFILE'>('TASKS');
+export default function App() {
+  // Main Portal Toggle State: 'GOVERNMENT' | 'VOLUNTEER'
+  const [portalMode, setPortalMode] = useState<'GOVERNMENT' | 'VOLUNTEER'>('GOVERNMENT');
+
+  // Sub-tab States (Explicitly typed)
+  const [govtTab, setGovtTab] = useState<GovtTab>('SOS');
+  const [volTab, setVolTab] = useState<VolTab>('INCIDENTS');
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans">
-      {/* Dev Switcher Header */}
-      <header className="bg-slate-900 border-b border-slate-800 px-4 py-2 flex flex-wrap items-center justify-between gap-2 text-xs">
+      {/* Top Portal Switcher Bar */}
+      <div className="bg-slate-900 border-b border-slate-800 px-4 py-2.5 flex items-center justify-between text-xs">
         <div className="flex items-center gap-2">
-          <span className="font-bold tracking-wider text-red-500 uppercase">VAJRANET WEB</span>
-          <span className="text-slate-500">|</span>
-          <span className="text-slate-400">Emergency Operations Platform</span>
+          <span className="font-black tracking-wider text-blue-500 uppercase text-sm">VajraNet</span>
+          <span className="text-slate-600">|</span>
+          <span className="text-slate-400">Disaster Management Platform</span>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-slate-400">Active View:</span>
+
+        <div className="flex items-center bg-slate-950 p-1 rounded border border-slate-800 gap-1">
           <button
-            onClick={() => setCurrentRole('GOVERNMENT')}
-            className={`px-3 py-1 rounded font-medium transition ${
-              currentRole === 'GOVERNMENT'
-                ? 'bg-blue-600 text-white'
-                : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+            onClick={() => setPortalMode('GOVERNMENT')}
+            className={`px-3 py-1.5 rounded transition font-bold ${
+              portalMode === 'GOVERNMENT'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            Government Command Center
+            🏛️ Government Command Center
           </button>
           <button
-            onClick={() => setCurrentRole('VOLUNTEER')}
-            className={`px-3 py-1 rounded font-medium transition ${
-              currentRole === 'VOLUNTEER'
-                ? 'bg-emerald-600 text-white'
-                : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+            onClick={() => setPortalMode('VOLUNTEER')}
+            className={`px-3 py-1.5 rounded transition font-bold ${
+              portalMode === 'VOLUNTEER'
+                ? 'bg-emerald-600 text-white shadow-sm'
+                : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            Volunteer Portal
+            🤝 Volunteer & Private Relief
           </button>
         </div>
-      </header>
+      </div>
 
       {/* Main Content Area */}
-      <main className="max-w-7xl mx-auto p-4 md:p-6 space-y-6">
-        {currentRole === 'GOVERNMENT' ? (
-          <div>
+      <main className="max-w-7xl mx-auto p-4 lg:p-6 space-y-6">
+        {portalMode === 'GOVERNMENT' ? (
+          <>
             <CommandHeader activeTab={govtTab} onTabChange={setGovtTab} />
+
+            {/* Always display overall metrics at the top of Command Center */}
             <MetricsOverview />
-            <div className="mt-6">
-              {govtTab === 'SOS' && <LiveSOSFeed />}
-              {govtTab === 'INCIDENTS' && <IncidentList />}
-              {govtTab === 'ANNOUNCEMENTS' && <AnnouncementPublisher />}
-              {govtTab === 'SHELTERS' && <ResourceShelters />}
-              {govtTab === 'HOSPITALS' && <ResourceHospitals />}
-              {govtTab === 'RELIEF' && <ResourceRelief />}
-            </div>
-          </div>
+
+            {govtTab === 'SOS' && <LiveSOSFeed />}
+            {govtTab === 'INCIDENTS' && <IncidentList />}
+            {govtTab === 'ANNOUNCEMENTS' && <AnnouncementPublisher />}
+            {govtTab === 'SHELTERS' && <ResourceShelters />}
+            {govtTab === 'HOSPITALS' && <ResourceHospitals />}
+            {govtTab === 'RELIEF' && <ResourceRelief />}
+          </>
         ) : (
-          <div>
-            <VolunteerHeader activeTab={volunteerTab} onTabChange={setVolunteerTab} />
-            <div className="mt-6">
-              {volunteerTab === 'TASKS' && <IncidentResponseBoard />}
-              {volunteerTab === 'SHELTERS' && <PrivateShelterManager />}
-              {volunteerTab === 'HOSPITALS' && <PrivateHospitalManager />}
-              {volunteerTab === 'FUNDRAISERS' && <ReliefFundraisers />}
-              {volunteerTab === 'PROFILE' && <VolunteerProfile />}
-            </div>
-          </div>
+          <>
+            <VolunteerHeader activeTab={volTab} setActiveTab={(tab) => setVolTab(tab as VolTab)} />
+
+            {volTab === 'INCIDENTS' && <IncidentResponseBoard />}
+            {volTab === 'SHELTERS' && <PrivateShelterManager />}
+            {volTab === 'HOSPITALS' && <PrivateHospitalManager />}
+            {volTab === 'FUNDRAISERS' && <ReliefFundraisers />}
+            {volTab === 'PROFILE' && <VolunteerProfile />}
+          </>
         )}
       </main>
     </div>
   );
 }
-
-export default App;
