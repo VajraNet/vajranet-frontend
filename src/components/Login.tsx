@@ -115,230 +115,221 @@ export function Login({ onLogin }: LoginProps) {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 flex flex-col justify-center items-center p-4 relative overflow-hidden font-sans select-none">
+    <div className="min-h-screen bg-gradient-to-b from-[#07172C] via-[#0E294B] to-[#07172C] flex flex-col justify-center items-center p-4 font-sans select-none relative overflow-hidden">
       
       {/* Background Ambient Glows */}
-      <div className="absolute top-1/4 -left-32 w-96 h-96 bg-blue-600/15 rounded-full blur-[120px] pointer-events-none"></div>
-      <div className="absolute bottom-1/4 -right-32 w-96 h-96 bg-emerald-600/15 rounded-full blur-[120px] pointer-events-none"></div>
+      <div className="absolute top-1/4 -left-32 w-96 h-96 bg-[#0077B6]/20 rounded-full blur-[120px] pointer-events-none"></div>
+      <div className="absolute bottom-1/4 -right-32 w-96 h-96 bg-[#D4AF37]/15 rounded-full blur-[120px] pointer-events-none"></div>
 
-      {/* Main Glassmorphic Container */}
-      <div className="w-full max-w-lg bg-slate-900/90 backdrop-blur-2xl border border-slate-800 rounded-3xl shadow-2xl p-6 sm:p-8 relative z-10 space-y-6">
+      {/* Main Container */}
+      <div className="w-full max-w-lg space-y-5 relative z-10">
         
         {/* Brand Header */}
         <div className="text-center space-y-1.5">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-emerald-500 p-0.5 shadow-xl shadow-blue-600/20 mb-1">
-            <div className="w-full h-full bg-slate-950 rounded-[14px] flex items-center justify-center">
-              <Shield className="w-6 h-6 text-blue-400" />
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-[#0B2545] border-2 border-[#D4AF37] shadow-2xl p-1 mb-1">
+            <div className="w-full h-full bg-[#07172C] rounded-full flex items-center justify-center">
+              <Shield className="w-8 h-8 text-[#D4AF37]" />
             </div>
           </div>
           <h1 className="text-2xl font-black text-white tracking-wide uppercase flex items-center justify-center gap-2">
             <span>VAJRANET</span>
-            <span className="text-[10px] bg-blue-950 text-blue-400 px-2 py-0.5 rounded-full border border-blue-800/80 font-mono">EOC</span>
+            <span className="text-[10px] bg-[#07172C] text-[#D4AF37] px-2 py-0.5 rounded-full border border-[#D4AF37]/50 font-mono">EOC</span>
           </h1>
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-[#D4AF37] font-medium font-mono">
             Emergency Operations & Disaster Response Command Platform
           </p>
         </div>
 
-        {/* 2 Roles Selector (Only Govt & Volunteer) */}
-        <div className="grid grid-cols-2 gap-2.5 bg-slate-950 p-1.5 rounded-2xl border border-slate-800">
-          <button
-            type="button"
-            onClick={() => handleRoleSwitch('GOVERNMENT')}
-            className={`py-3 px-3 rounded-xl border text-center transition-all flex flex-col items-center justify-center gap-1 cursor-pointer ${
-              selectedRole === 'GOVERNMENT'
-                ? 'bg-blue-950/60 border-blue-500 text-white shadow-lg shadow-blue-500/10 ring-1 ring-blue-500'
-                : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
-            }`}
-          >
-            <div className="flex items-center gap-1.5">
-              <Building2 className={`w-4 h-4 ${selectedRole === 'GOVERNMENT' ? 'text-blue-400' : 'text-slate-500'}`} />
-              <span className="font-bold text-xs">🏛️ Government</span>
-            </div>
-            <span className="text-[9px] text-blue-400/90 font-mono">Needs .gov Email</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => handleRoleSwitch('VOLUNTEER')}
-            className={`py-3 px-3 rounded-xl border text-center transition-all flex flex-col items-center justify-center gap-1 cursor-pointer ${
-              selectedRole === 'VOLUNTEER'
-                ? 'bg-emerald-950/60 border-emerald-500 text-white shadow-lg shadow-emerald-500/10 ring-1 ring-emerald-500'
-                : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
-            }`}
-          >
-            <div className="flex items-center gap-1.5">
-              <HeartPulse className={`w-4 h-4 ${selectedRole === 'VOLUNTEER' ? 'text-emerald-400' : 'text-slate-500'}`} />
-              <span className="font-bold text-xs">🤝 Volunteer</span>
-            </div>
-            <span className="text-[9px] text-emerald-400/90 font-mono">Any Email Works</span>
-          </button>
-        </div>
-
-        {/* Validation Error Alert */}
-        {errorMessage && (
-          <div className="bg-rose-950/80 border border-rose-600/80 rounded-2xl p-3 text-xs text-rose-200 flex items-start gap-2 animate-fadeIn">
-            <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-            <span>{errorMessage}</span>
-          </div>
-        )}
-
-        {/* Form Container */}
-        <form onSubmit={handleSubmit} className="space-y-4">
+        {/* High-Contrast Crisp White Card */}
+        <div className="bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-200">
           
-          {/* Email Input */}
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-semibold text-slate-300">
-                {selectedRole === 'GOVERNMENT' ? 'Official Government Email' : 'Email Address'}
-              </label>
-              {selectedRole === 'GOVERNMENT' && (
-                <span className="text-[10px] text-blue-400 font-mono font-bold">.gov / .nic.in required</span>
-              )}
-            </div>
+          {/* 2 Role Tabs Switcher */}
+          <div className="grid grid-cols-2 bg-slate-100 border-b border-slate-200 text-xs font-bold">
+            <button
+              type="button"
+              onClick={() => handleRoleSwitch('GOVERNMENT')}
+              className={`py-3.5 px-3 flex items-center justify-center gap-2 transition cursor-pointer ${
+                selectedRole === 'GOVERNMENT'
+                  ? 'bg-[#0077B6] text-white shadow-md'
+                  : 'text-slate-600 hover:bg-slate-200/70'
+              }`}
+            >
+              <Building2 className="w-4 h-4" />
+              <span>🏛️ Command Authority</span>
+            </button>
 
-            <div className="relative">
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => {
-                  setEmail(e.target.value);
-                  setErrorMessage(null);
-                }}
-                placeholder={selectedRole === 'GOVERNMENT' ? 'officer.name@ndrf.gov.in' : 'volunteer@organization.org'}
-                className={`w-full bg-slate-950 border rounded-xl pl-9 pr-4 py-2.5 text-xs text-white placeholder-slate-600 focus:outline-none transition ${
-                  selectedRole === 'GOVERNMENT' && !isGovEmail(email) && email.length > 3
-                    ? 'border-amber-500/80 focus:border-amber-500'
-                    : 'border-slate-800 focus:border-blue-500'
-                }`}
-              />
-              <Mail className="w-4 h-4 text-slate-500 absolute left-3 top-3 pointer-events-none" />
-            </div>
+            <button
+              type="button"
+              onClick={() => handleRoleSwitch('VOLUNTEER')}
+              className={`py-3.5 px-3 flex items-center justify-center gap-2 transition cursor-pointer ${
+                selectedRole === 'VOLUNTEER'
+                  ? 'bg-[#059669] text-white shadow-md'
+                  : 'text-slate-600 hover:bg-slate-200/70'
+              }`}
+            >
+              <HeartPulse className="w-4 h-4" />
+              <span>🤝 Volunteer & Responders</span>
+            </button>
           </div>
 
-          {/* Auth Method Switcher (Password vs OTP) */}
-          <div className="flex items-center justify-between pt-1">
-            <label className="text-xs font-semibold text-slate-300">Authentication Method</label>
-            <div className="flex items-center bg-slate-950 p-0.5 rounded-lg border border-slate-800 text-[10px] font-bold">
-              <button
-                type="button"
-                onClick={() => setAuthMode('PASSWORD')}
-                className={`px-2.5 py-1 rounded transition cursor-pointer ${
-                  authMode === 'PASSWORD' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                Password
-              </button>
-              <button
-                type="button"
-                onClick={() => setAuthMode('OTP')}
-                className={`px-2.5 py-1 rounded transition cursor-pointer ${
-                  authMode === 'OTP' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                6-Digit OTP
-              </button>
-            </div>
-          </div>
+          {/* Card Body */}
+          <div className="p-6 sm:p-8 space-y-4">
+            
+            <p className="text-center text-xs text-slate-500 font-medium">
+              {selectedRole === 'GOVERNMENT' && 'Restricted Command Center Access (Requires .gov / .nic.in email)'}
+              {selectedRole === 'VOLUNTEER' && 'Registered NGOs, Field Medical Personnel & Volunteer Response Teams'}
+            </p>
 
-          {/* Mode A: Password Input */}
-          {authMode === 'PASSWORD' && (
-            <div className="space-y-1.5">
-              <div className="relative">
-                <input
-                  type="password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter access password"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-4 py-2.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 font-mono transition"
-                />
-                <Lock className="w-4 h-4 text-slate-500 absolute left-3 top-3 pointer-events-none" />
+            {/* Validation Error Alert */}
+            {errorMessage && (
+              <div className="bg-rose-50 border border-rose-200 rounded-2xl p-3 text-xs text-rose-700 flex items-start gap-2 animate-fadeIn">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                <span>{errorMessage}</span>
               </div>
-            </div>
-          )}
-
-          {/* Mode B: 6-Digit OTP Input */}
-          {authMode === 'OTP' && (
-            <div className="space-y-2">
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <input
-                    type="text"
-                    maxLength={6}
-                    value={otp}
-                    onChange={(e) => setOtp(e.target.value)}
-                    placeholder="Enter 6-digit OTP"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-4 py-2.5 text-xs text-white font-mono tracking-widest placeholder-slate-600 focus:outline-none focus:border-blue-500 transition"
-                  />
-                  <KeyRound className="w-4 h-4 text-slate-500 absolute left-3 top-3 pointer-events-none" />
-                </div>
-                <button
-                  type="button"
-                  onClick={handleSendOtp}
-                  className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3.5 py-2.5 rounded-xl text-xs font-bold font-mono transition cursor-pointer"
-                >
-                  {otpSent ? 'Resend' : 'Send OTP'}
-                </button>
-              </div>
-
-              {/* Instant Demo OTP Hint */}
-              <div className="bg-slate-950/80 border border-slate-800/80 rounded-xl p-2.5 text-[11px] text-emerald-400 font-mono flex items-center justify-between">
-                <span>Demo OTP Code: <strong>829104</strong></span>
-                <span className="text-[9px] text-slate-500">Auto-filled</span>
-              </div>
-            </div>
-          )}
-
-          {/* Submit Button */}
-          <button
-            type="submit"
-            disabled={isLoading}
-            className={`w-full py-3 px-4 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition shadow-xl flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 ${
-              selectedRole === 'GOVERNMENT'
-                ? 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 shadow-blue-600/30'
-                : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 shadow-emerald-600/30'
-            }`}
-          >
-            {isLoading ? (
-              <span className="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-            ) : (
-              <>
-                <span>Enter {selectedRole === 'GOVERNMENT' ? 'Command Center' : 'Volunteer Portal'}</span>
-                <ArrowRight className="w-4 h-4" />
-              </>
             )}
-          </button>
-        </form>
 
-        {/* Quick Demo Pre-fill Links */}
-        <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-[10px] text-slate-500 font-mono">
-          <button
-            type="button"
-            onClick={() => {
-              setSelectedRole('GOVERNMENT');
-              setEmail('command.ndrf@disaster.gov.in');
-              setErrorMessage(null);
-            }}
-            className="hover:text-blue-400 transition underline cursor-pointer"
-          >
-            Govt Demo (.gov)
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setSelectedRole('VOLUNTEER');
-              setEmail('alex.mercer@redcross.org');
-              setErrorMessage(null);
-            }}
-            className="hover:text-emerald-400 transition underline cursor-pointer"
-          >
-            Volunteer Demo
-          </button>
+            {/* Form */}
+            <form onSubmit={handleSubmit} className="space-y-4">
+              
+              {/* Email Input */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-700">
+                    {selectedRole === 'GOVERNMENT' ? 'Official Government Email' : 'Email Address'}
+                  </label>
+                  {selectedRole === 'GOVERNMENT' && (
+                    <span className="text-[10px] text-[#0077B6] font-mono font-bold">.gov / .nic.in required</span>
+                  )}
+                </div>
+
+                <div className="relative">
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      setErrorMessage(null);
+                    }}
+                    placeholder={selectedRole === 'GOVERNMENT' ? 'officer.name@ndrf.gov.in' : 'volunteer@organization.org'}
+                    className={`w-full bg-slate-50 border rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none transition ${
+                      selectedRole === 'GOVERNMENT' && !isGovEmail(email) && email.length > 3
+                        ? 'border-amber-500 focus:border-amber-500 focus:bg-white'
+                        : 'border-slate-300 focus:border-[#0077B6] focus:bg-white'
+                    }`}
+                  />
+                  <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3 pointer-events-none" />
+                </div>
+              </div>
+
+              {/* Auth Method Switcher (Password vs OTP) */}
+              <div className="flex items-center justify-between pt-1">
+                <span className="text-xs font-bold text-slate-700">Authentication Method</span>
+                <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200 text-[11px] font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setAuthMode('PASSWORD')}
+                    className={`px-3 py-1 rounded-lg transition cursor-pointer ${
+                      authMode === 'PASSWORD' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    Password
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAuthMode('OTP')}
+                    className={`px-3 py-1 rounded-lg transition cursor-pointer ${
+                      authMode === 'OTP' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    Instant OTP
+                  </button>
+                </div>
+              </div>
+
+              {/* Option A: Password Field */}
+              {authMode === 'PASSWORD' && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700">Account Password</label>
+                  <div className="relative">
+                    <input
+                      type="password"
+                      required
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="••••••••••••"
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#0077B6] focus:bg-white transition"
+                    />
+                    <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3 pointer-events-none" />
+                  </div>
+                </div>
+              )}
+
+              {/* Option B: OTP Field */}
+              {authMode === 'OTP' && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-700">6-Digit Verification OTP</label>
+                    <button
+                      type="button"
+                      onClick={handleSendOtp}
+                      className="text-[11px] text-[#0077B6] hover:underline font-bold cursor-pointer"
+                    >
+                      {otpSent ? 'Resend OTP' : 'Request OTP Code'}
+                    </button>
+                  </div>
+
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-2.5 flex items-center justify-between text-xs text-emerald-800 font-mono">
+                    <span>Auto-filled OTP: <strong className="font-bold text-sm tracking-widest text-emerald-900">{otp}</strong></span>
+                    <span className="text-[10px] bg-[#059669] text-white px-2 py-0.5 rounded font-bold">READY</span>
+                  </div>
+
+                  <div className="relative">
+                    <input
+                      type="text"
+                      maxLength={6}
+                      value={otp}
+                      onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
+                      placeholder="829104"
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl pl-10 pr-4 py-2.5 text-sm font-mono tracking-widest text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#0077B6] focus:bg-white text-center font-bold"
+                    />
+                    <KeyRound className="w-4 h-4 text-slate-400 absolute left-3.5 top-3 pointer-events-none" />
+                  </div>
+                </div>
+              )}
+
+              {/* Submit Button */}
+              <button
+                type="submit"
+                disabled={isLoading}
+                className={`w-full py-3.5 text-white font-bold text-sm rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                  selectedRole === 'GOVERNMENT'
+                    ? 'bg-[#0077B6] hover:bg-[#005f92] shadow-blue-600/20'
+                    : 'bg-[#059669] hover:bg-[#047857] shadow-emerald-600/20'
+                }`}
+              >
+                {isLoading ? (
+                  <span>Authenticating Command Session...</span>
+                ) : (
+                  <>
+                    <span>Enter {selectedRole === 'GOVERNMENT' ? 'Command Authority' : 'Volunteer Portal'} →</span>
+                  </>
+                )}
+              </button>
+
+            </form>
+
+          </div>
+
         </div>
+
+        {/* Footer Security Badges */}
+        <p className="text-center text-[10px] text-slate-400 font-mono">
+          VajraNet EOC Protocol v2.4 • 256-Bit TLS Protected Command Relay
+        </p>
 
       </div>
+
     </div>
   );
 }
