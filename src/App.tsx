@@ -26,6 +26,7 @@ import { VolunteerProfile } from './components/volunteers/VolunteerProfile';
 
 // Icons & API Client
 import { 
+  Shield,
   ShieldAlert, 
   Flame, 
   Radio, 
@@ -44,7 +45,9 @@ import {
   LogOut, 
   ChevronRight,
   Layers,
-  Map as MapIcon
+  Map as MapIcon,
+  Sun,
+  Moon
 } from 'lucide-react';
 import { apiClient } from './api/client';
 
@@ -52,6 +55,25 @@ export type GovtTab = 'OVERVIEW' | 'SOS' | 'INCIDENTS' | 'ANNOUNCEMENTS' | 'SHEL
 export type VolTab = 'OVERVIEW' | 'INCIDENTS' | 'TASKS' | 'SHELTERS' | 'HOSPITALS' | 'FUNDRAISERS' | 'OFFLINE_SYNC' | 'PROFILE';
 
 export default function App() {
+  // Theme State: 'dark' | 'light'
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    try {
+      return (localStorage.getItem('vajranet_frontend_theme') as 'dark' | 'light') || 'dark';
+    } catch {
+      return 'dark';
+    }
+  });
+
+  const toggleTheme = () => {
+    const next = theme === 'dark' ? 'light' : 'dark';
+    setTheme(next);
+    try {
+      localStorage.setItem('vajranet_frontend_theme', next);
+    } catch (e) {
+      console.warn('Failed to save frontend theme', e);
+    }
+  };
+
   // Authentication State
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [user, setUser] = useState<{ name: string; role: string } | null>(null);
@@ -138,6 +160,8 @@ export default function App() {
     );
   }
 
+  const isDark = theme === 'dark';
+
   // Sidebar Menu Items for Government Command
   const govtNavItems: { id: GovtTab; label: string; icon: any; count?: number; badgeColor?: string }[] = [
     { id: 'OVERVIEW', label: 'Overview', icon: LayoutDashboard },
@@ -163,46 +187,62 @@ export default function App() {
   ];
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans flex flex-col">
+    <div className={`min-h-screen ${
+      isDark 
+        ? 'bg-gradient-to-b from-[#07172C] via-[#0E294B] to-[#07172C] text-slate-100' 
+        : 'bg-gradient-to-b from-[#F1F5F9] via-[#E2E8F0] to-[#F1F5F9] text-slate-900'
+    } font-sans flex flex-col transition-colors duration-300`}>
       
       {/* ===================== 1. TOP GLOBAL NAVBAR ===================== */}
-      <header className="bg-slate-900/95 backdrop-blur-md border-b border-slate-800 px-4 py-2.5 flex items-center justify-between text-xs sticky top-0 z-50 shadow-md">
+      <header className={`px-4 py-2.5 flex items-center justify-between text-xs sticky top-0 z-50 shadow-md transition-colors ${
+        isDark 
+          ? 'bg-[#0B2545]/95 backdrop-blur-md border-b border-[#D4AF37]/40 text-white' 
+          : 'bg-white/95 backdrop-blur-md border-b border-slate-200 text-slate-900'
+      }`}>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
-            <span className="font-black tracking-wider text-blue-400 uppercase text-sm">VAJRANET</span>
-            <span className="text-slate-600">|</span>
+            <div className="w-7 h-7 rounded-full bg-[#07172C] border border-[#D4AF37] flex items-center justify-center shadow-sm">
+              <Shield className="w-4 h-4 text-[#D4AF37]" />
+            </div>
+            <span className={`font-black tracking-wider uppercase text-sm ${isDark ? 'text-white' : 'text-slate-900'}`}>
+              VAJRANET
+            </span>
+            <span className="text-[#D4AF37] font-mono text-[10px] font-bold">EOC</span>
+            <span className="text-slate-500">|</span>
             <span className="text-slate-400 font-mono hidden md:inline">Emergency Operations Command</span>
           </div>
         </div>
 
         {/* Portal Switcher Navigation */}
-        <div className="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800 gap-1">
+        <div className={`flex items-center p-1 rounded-xl border gap-1 shadow-sm ${
+          isDark ? 'bg-[#07172C] border-slate-800' : 'bg-slate-100 border-slate-300'
+        }`}>
           <button
             onClick={() => setPortalMode('GOVERNMENT')}
-            className={`px-3 py-1.5 rounded-lg transition font-bold text-xs ${
+            className={`px-3 py-1.5 rounded-lg transition font-bold text-xs cursor-pointer ${
               portalMode === 'GOVERNMENT'
-                ? 'bg-blue-600 text-white shadow-sm'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'bg-[#0077B6] text-white shadow-sm'
+                : (isDark ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-900')
             }`}
           >
             🏛️ Government Command
           </button>
           <button
             onClick={() => setPortalMode('VOLUNTEER')}
-            className={`px-3 py-1.5 rounded-lg transition font-bold text-xs ${
+            className={`px-3 py-1.5 rounded-lg transition font-bold text-xs cursor-pointer ${
               portalMode === 'VOLUNTEER'
-                ? 'bg-emerald-600 text-white shadow-sm'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'bg-[#059669] text-white shadow-sm'
+                : (isDark ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-900')
             }`}
           >
             🤝 Volunteer Operations
           </button>
           <button
             onClick={() => setPortalMode('VAJRA_AI')}
-            className={`px-3 py-1.5 rounded-lg transition font-bold text-xs flex items-center gap-1.5 ${
+            className={`px-3 py-1.5 rounded-lg transition font-bold text-xs flex items-center gap-1.5 cursor-pointer ${
               portalMode === 'VAJRA_AI'
-                ? 'bg-purple-600 text-white shadow-sm'
-                : 'text-slate-400 hover:text-purple-300'
+                ? 'bg-[#7E22CE] text-white shadow-sm'
+                : (isDark ? 'text-slate-400 hover:text-purple-300' : 'text-slate-600 hover:text-purple-700')
             }`}
           >
             <span>🤖 VajraAI</span>
@@ -210,15 +250,44 @@ export default function App() {
           </button>
         </div>
 
-        {/* Verified User Info & Sign Out */}
+        {/* Verified User Info, Theme Toggle & Sign Out */}
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5 bg-green-500/10 text-green-400 px-2.5 py-1 rounded-lg border border-green-500/20 font-medium">
-            <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></span>
+          
+          {/* Light / Dark Mode Toggle Button */}
+          <button
+            onClick={toggleTheme}
+            className={`px-2.5 py-1 rounded-full text-xs font-mono font-bold flex items-center gap-1.5 transition cursor-pointer shadow-sm active:scale-95 border ${
+              isDark 
+                ? 'bg-[#07172C] hover:bg-[#0E294B] border-[#D4AF37]/60 text-[#D4AF37]' 
+                : 'bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-800'
+            }`}
+            title="Toggle Light/Dark Theme"
+          >
+            {isDark ? (
+              <>
+                <Sun className="w-3.5 h-3.5 text-amber-400" />
+                <span className="text-[10px]">Light</span>
+              </>
+            ) : (
+              <>
+                <Moon className="w-3.5 h-3.5 text-blue-600" />
+                <span className="text-[10px]">Dark</span>
+              </>
+            )}
+          </button>
+
+          <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border font-medium ${
+            isDark 
+              ? 'bg-[#059669]/10 text-emerald-300 border-emerald-500/30' 
+              : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+          }`}>
+            <span className="w-1.5 h-1.5 rounded-full bg-[#059669] animate-pulse"></span>
             <span className="hidden sm:inline">Verified:</span> {user?.name || 'Official'}
           </div>
+
           <button
             onClick={() => setIsAuthenticated(false)}
-            className="text-slate-400 hover:text-red-400 transition font-medium flex items-center gap-1 cursor-pointer"
+            className={`${isDark ? 'text-slate-400 hover:text-rose-400' : 'text-slate-500 hover:text-rose-600'} transition font-medium flex items-center gap-1 cursor-pointer`}
           >
             <LogOut className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Sign Out</span>
@@ -231,16 +300,20 @@ export default function App() {
         
         {/* Left EOC Sidebar (Visible in Govt & Volunteer modes) */}
         {portalMode !== 'VAJRA_AI' && (
-          <aside className="w-56 lg:w-64 bg-slate-900/90 border-r border-slate-800 p-3 flex flex-col justify-between hidden md:flex shrink-0">
+          <aside className={`w-56 lg:w-64 p-3 flex flex-col justify-between hidden md:flex shrink-0 border-r transition-colors ${
+            isDark 
+              ? 'bg-[#07172C]/95 border-[#D4AF37]/30' 
+              : 'bg-white border-slate-200 shadow-sm'
+          }`}>
             <div className="space-y-4">
               
               {/* Sidebar Header Badge */}
               <div className="px-2 py-1.5">
-                <span className="text-[10px] font-mono uppercase tracking-wider text-slate-500 block font-bold">
+                <span className={`text-[10px] font-mono uppercase tracking-wider block font-bold ${isDark ? 'text-[#D4AF37]' : 'text-slate-500'}`}>
                   {portalMode === 'GOVERNMENT' ? 'COMMAND CONSOLE' : 'RESPONDER CONSOLE'}
                 </span>
-                <h3 className="text-xs font-bold text-white mt-0.5">
-                  {portalMode === 'GOVERNMENT' ? 'NDRF Master Authority' : 'Field NGO & Volunteers'}
+                <h3 className={`text-xs font-bold mt-0.5 ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                  {portalMode === 'GOVERNMENT' ? 'Master Operations Authority' : 'Field NGO & Volunteers'}
                 </h3>
               </div>
 
@@ -255,12 +328,12 @@ export default function App() {
                       onClick={() => setGovtTab(item.id)}
                       className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition cursor-pointer ${
                         isActive
-                          ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
-                          : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                          ? 'bg-[#0077B6] text-white shadow-md'
+                          : (isDark ? 'text-slate-400 hover:text-white hover:bg-slate-850' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100')
                       }`}
                     >
                       <div className="flex items-center gap-2.5">
-                        <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+                        <Icon className={`w-4 h-4 ${isActive ? 'text-white' : (isDark ? 'text-slate-400' : 'text-slate-500')}`} />
                         <span>{item.label}</span>
                       </div>
                       {item.count !== undefined && (
@@ -283,12 +356,12 @@ export default function App() {
                       onClick={() => setVolTab(item.id)}
                       className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition cursor-pointer ${
                         isActive
-                          ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20'
-                          : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                          ? 'bg-[#059669] text-white shadow-md'
+                          : (isDark ? 'text-slate-400 hover:text-white hover:bg-slate-850' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100')
                       }`}
                     >
                       <div className="flex items-center gap-2.5">
-                        <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+                        <Icon className={`w-4 h-4 ${isActive ? 'text-white' : (isDark ? 'text-slate-400' : 'text-slate-500')}`} />
                         <span>{item.label}</span>
                       </div>
                       {item.count !== undefined && (
@@ -305,28 +378,32 @@ export default function App() {
             </div>
 
             {/* Sidebar Bottom Telemetry Pill */}
-            <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 text-[10px] font-mono space-y-1">
+            <div className={`border rounded-xl p-3 text-[10px] font-mono space-y-1 ${
+              isDark ? 'bg-[#050F1D] border-slate-800' : 'bg-slate-50 border-slate-200'
+            }`}>
               <div className="flex items-center justify-between">
                 <span className="text-slate-500">P2P Mesh Link:</span>
-                <span className="text-emerald-400 font-bold">ONLINE</span>
+                <span className="text-[#059669] font-bold">ONLINE</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-slate-500">Local Gateway:</span>
-                <span className="text-blue-400 font-bold">ACTIVE</span>
+                <span className="text-[#0077B6] font-bold">ACTIVE</span>
               </div>
             </div>
           </aside>
         )}
 
-        {/* Mobile Navigation Strip (Visible only on small screens) */}
+        {/* Mobile Navigation Strip */}
         {portalMode !== 'VAJRA_AI' && (
-          <div className="md:hidden bg-slate-900 border-b border-slate-800 p-2 overflow-x-auto flex gap-1 sticky top-12 z-40">
+          <div className={`md:hidden p-2 overflow-x-auto flex gap-1 sticky top-12 z-40 border-b ${
+            isDark ? 'bg-[#07172C] border-slate-800' : 'bg-white border-slate-200'
+          }`}>
             {portalMode === 'GOVERNMENT' && govtNavItems.map((item) => (
               <button
                 key={item.id}
                 onClick={() => setGovtTab(item.id)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${
-                  govtTab === item.id ? 'bg-blue-600 text-white' : 'text-slate-400'
+                  govtTab === item.id ? 'bg-[#0077B6] text-white' : 'text-slate-400'
                 }`}
               >
                 {item.label}
@@ -337,7 +414,7 @@ export default function App() {
                 key={item.id}
                 onClick={() => setVolTab(item.id)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${
-                  volTab === item.id ? 'bg-emerald-600 text-white' : 'text-slate-400'
+                  volTab === item.id ? 'bg-[#059669] text-white' : 'text-slate-400'
                 }`}
               >
                 {item.label}
@@ -379,47 +456,47 @@ export default function App() {
 
           {/* ===================== VAJRA AI INTELLIGENCE ===================== */}
           {portalMode === 'VAJRA_AI' && (
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 h-[82vh] flex flex-col justify-between shadow-2xl space-y-4">
+            <div className="bg-white text-slate-900 border border-slate-200 rounded-3xl p-6 h-[82vh] flex flex-col justify-between shadow-2xl space-y-4">
               
               {/* VajraAI Header */}
-              <div className="border-b border-slate-800 pb-4 flex items-center justify-between">
+              <div className="border-b border-slate-200 pb-4 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-2xl bg-purple-950 border border-purple-700/80 flex items-center justify-center text-purple-400">
+                  <div className="w-10 h-10 rounded-2xl bg-purple-100 border border-purple-300 flex items-center justify-center text-purple-700">
                     <Bot className="w-6 h-6 animate-pulse" />
                   </div>
                   <div>
-                    <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                    <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                       <span>VajraAI Emergency Intelligence Engine</span>
-                      <span className="text-[10px] bg-purple-950 text-purple-300 border border-purple-800 px-2 py-0.2 rounded-full font-mono">
+                      <span className="text-[10px] bg-purple-100 text-purple-800 border border-purple-300 px-2 py-0.2 rounded-full font-mono font-bold">
                         v1.0 ONLINE
                       </span>
                     </h2>
-                    <p className="text-slate-400 text-xs mt-0.5">
+                    <p className="text-slate-500 text-xs mt-0.5">
                       Live situation triage synthesis, resource allocation forecasting, and safety protocol advisor.
                     </p>
                   </div>
                 </div>
-                <span className="bg-purple-900/30 text-purple-300 border border-purple-500/30 text-xs px-3 py-1 rounded-full font-mono hidden sm:inline">
+                <span className="bg-purple-50 text-purple-700 border border-purple-300 text-xs px-3 py-1 rounded-full font-mono hidden sm:inline font-bold">
                   AI Gateway: Connected
                 </span>
               </div>
 
               {/* Chat Messages Feed */}
-              <div className="flex-1 bg-slate-950/80 rounded-xl p-4 overflow-y-auto space-y-3.5 border border-slate-800/80">
+              <div className="flex-1 bg-slate-50 rounded-2xl p-4 overflow-y-auto space-y-3.5 border border-slate-200">
                 {aiChatLog.map((msg, index) => (
                   <div
                     key={index}
                     className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
                   >
                     <div
-                      className={`max-w-2xl rounded-2xl p-4 text-xs leading-relaxed ${
+                      className={`max-w-2xl rounded-2xl p-4 text-xs leading-relaxed shadow-sm ${
                         msg.sender === 'user'
-                          ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg'
-                          : 'bg-slate-900 border border-slate-800 text-slate-200 space-y-2'
+                          ? 'bg-[#0077B6] text-white'
+                          : 'bg-white border border-slate-200 text-slate-800 space-y-2'
                       }`}
                     >
                       {msg.sender === 'ai' && (
-                        <div className="flex items-center gap-1.5 text-purple-400 font-bold text-[11px] mb-1">
+                        <div className="flex items-center gap-1.5 text-purple-700 font-bold text-[11px] mb-1">
                           <Sparkles className="w-3.5 h-3.5" />
                           <span>VajraAI Intelligence Synthesis:</span>
                         </div>
@@ -427,8 +504,8 @@ export default function App() {
                       <p className="whitespace-pre-line">{msg.text}</p>
 
                       {msg.advisory && (
-                        <div className="bg-slate-950/90 border border-slate-800 rounded-lg p-2 text-[10px] text-slate-400 flex items-start gap-1.5 mt-2">
-                          <AlertCircle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-2 text-[10px] text-amber-800 flex items-start gap-1.5 mt-2">
+                          <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
                           <span>{msg.advisory}</span>
                         </div>
                       )}
@@ -439,7 +516,7 @@ export default function App() {
                             <button
                               key={sIdx}
                               onClick={() => handleSendAiQuery(sug)}
-                              className="bg-purple-950/60 hover:bg-purple-900/80 text-purple-300 border border-purple-800/80 rounded-lg px-2.5 py-1 text-[10px] transition cursor-pointer font-mono"
+                              className="bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-300 rounded-lg px-2.5 py-1 text-[10px] transition cursor-pointer font-mono font-bold"
                             >
                               + {sug}
                             </button>
@@ -452,8 +529,8 @@ export default function App() {
 
                 {aiLoading && (
                   <div className="flex justify-start">
-                    <div className="bg-slate-900 border border-slate-800 rounded-2xl px-4 py-2.5 text-xs text-purple-300 font-mono flex items-center gap-2">
-                      <span className="inline-block w-3.5 h-3.5 border-2 border-purple-400/30 border-t-purple-400 rounded-full animate-spin"></span>
+                    <div className="bg-white border border-slate-200 rounded-2xl px-4 py-2.5 text-xs text-[#0077B6] font-mono flex items-center gap-2">
+                      <span className="inline-block w-3.5 h-3.5 border-2 border-[#0077B6]/30 border-t-[#0077B6] rounded-full animate-spin"></span>
                       <span>Synthesizing live disaster telemetry...</span>
                     </div>
                   </div>
@@ -470,12 +547,12 @@ export default function App() {
                     if (e.key === 'Enter') handleSendAiQuery();
                   }}
                   placeholder="Ask VajraAI for live triage summaries, shelter forecasts, or evacuation corridors..."
-                  className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition"
+                  className="flex-1 bg-slate-50 border border-slate-300 rounded-xl px-4 py-3 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#0077B6] focus:bg-white transition"
                 />
                 <button 
                   onClick={() => handleSendAiQuery()}
                   disabled={aiLoading}
-                  className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white px-5 py-3 rounded-xl font-bold text-xs transition shadow-lg shadow-purple-600/30 flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                  className="bg-[#0077B6] hover:bg-[#005f92] text-white px-5 py-3 rounded-xl font-bold text-xs transition shadow-md flex items-center gap-2 cursor-pointer disabled:opacity-50"
                 >
                   <Send className="w-4 h-4" />
                   <span>Send</span>
