@@ -456,107 +456,45 @@ export default function App() {
 
           {/* ===================== VAJRA AI INTELLIGENCE ===================== */}
           {portalMode === 'VAJRA_AI' && (
-            <div className="bg-white text-slate-900 border border-slate-200 rounded-3xl p-6 h-[82vh] flex flex-col justify-between shadow-2xl space-y-4">
+            <div className="bg-white text-slate-900 border border-slate-200 rounded-3xl h-[85vh] flex flex-col justify-between shadow-2xl overflow-hidden animate-fadeIn">
               
-              {/* VajraAI Header */}
-              <div className="border-b border-slate-200 pb-4 flex items-center justify-between">
+              {/* VajraAI Top Control Bar */}
+              <div className="bg-[#0B2545] text-white px-5 py-3.5 border-b border-[#D4AF37]/40 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-2xl bg-purple-100 border border-purple-300 flex items-center justify-center text-purple-700">
+                  <div className="w-10 h-10 rounded-2xl bg-purple-950 border border-purple-400 flex items-center justify-center text-purple-300">
                     <Bot className="w-6 h-6 animate-pulse" />
                   </div>
                   <div>
-                    <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                    <h2 className="text-sm font-bold text-white flex items-center gap-2">
                       <span>VajraAI Emergency Intelligence Engine</span>
-                      <span className="text-[10px] bg-purple-100 text-purple-800 border border-purple-300 px-2 py-0.2 rounded-full font-mono font-bold">
-                        v1.0 ONLINE
+                      <span className="text-[10px] bg-purple-900/80 text-purple-200 border border-purple-400 px-2 py-0.2 rounded-full font-mono font-bold">
+                        🟢 LIVE on vajraai-steel.vercel.app
                       </span>
                     </h2>
-                    <p className="text-slate-500 text-xs mt-0.5">
-                      Live situation triage synthesis, resource allocation forecasting, and safety protocol advisor.
+                    <p className="text-[#D4AF37] text-xs font-mono mt-0.5">
+                      Connected Live Cloud AI Assistant for Automated Incident Triage & Evacuation Guidance
                     </p>
                   </div>
                 </div>
-                <span className="bg-purple-50 text-purple-700 border border-purple-300 text-xs px-3 py-1 rounded-full font-mono hidden sm:inline font-bold">
-                  AI Gateway: Connected
-                </span>
-              </div>
 
-              {/* Chat Messages Feed */}
-              <div className="flex-1 bg-slate-50 rounded-2xl p-4 overflow-y-auto space-y-3.5 border border-slate-200">
-                {aiChatLog.map((msg, index) => (
-                  <div
-                    key={index}
-                    className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => window.open('https://vajraai-steel.vercel.app', '_blank')}
+                    className="bg-[#0077B6] hover:bg-[#005f92] text-white px-3.5 py-1.5 rounded-xl font-mono text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm"
                   >
-                    <div
-                      className={`max-w-2xl rounded-2xl p-4 text-xs leading-relaxed shadow-sm ${
-                        msg.sender === 'user'
-                          ? 'bg-[#0077B6] text-white'
-                          : 'bg-white border border-slate-200 text-slate-800 space-y-2'
-                      }`}
-                    >
-                      {msg.sender === 'ai' && (
-                        <div className="flex items-center gap-1.5 text-purple-700 font-bold text-[11px] mb-1">
-                          <Sparkles className="w-3.5 h-3.5" />
-                          <span>VajraAI Intelligence Synthesis:</span>
-                        </div>
-                      )}
-                      <p className="whitespace-pre-line">{msg.text}</p>
-
-                      {msg.advisory && (
-                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-2 text-[10px] text-amber-800 flex items-start gap-1.5 mt-2">
-                          <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
-                          <span>{msg.advisory}</span>
-                        </div>
-                      )}
-
-                      {msg.suggestions && msg.suggestions.length > 0 && (
-                        <div className="pt-2 flex flex-wrap gap-1.5">
-                          {msg.suggestions.map((sug, sIdx) => (
-                            <button
-                              key={sIdx}
-                              onClick={() => handleSendAiQuery(sug)}
-                              className="bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-300 rounded-lg px-2.5 py-1 text-[10px] transition cursor-pointer font-mono font-bold"
-                            >
-                              + {sug}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-
-                {aiLoading && (
-                  <div className="flex justify-start">
-                    <div className="bg-white border border-slate-200 rounded-2xl px-4 py-2.5 text-xs text-[#0077B6] font-mono flex items-center gap-2">
-                      <span className="inline-block w-3.5 h-3.5 border-2 border-[#0077B6]/30 border-t-[#0077B6] rounded-full animate-spin"></span>
-                      <span>Synthesizing live disaster telemetry...</span>
-                    </div>
-                  </div>
-                )}
+                    <span>Open Fullscreen</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
 
-              {/* AI Query Input Bar */}
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={aiQuery}
-                  onChange={(e) => setAiQuery(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleSendAiQuery();
-                  }}
-                  placeholder="Ask VajraAI for live triage summaries, shelter forecasts, or evacuation corridors..."
-                  className="flex-1 bg-slate-50 border border-slate-300 rounded-xl px-4 py-3 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#0077B6] focus:bg-white transition"
+              {/* Embedded Live VajraAI App */}
+              <div className="flex-1 w-full bg-slate-900 relative">
+                <iframe
+                  src="https://vajraai-steel.vercel.app"
+                  title="VajraAI Emergency Intelligence"
+                  className="w-full h-full border-none"
                 />
-                <button 
-                  onClick={() => handleSendAiQuery()}
-                  disabled={aiLoading}
-                  className="bg-[#0077B6] hover:bg-[#005f92] text-white px-5 py-3 rounded-xl font-bold text-xs transition shadow-md flex items-center gap-2 cursor-pointer disabled:opacity-50"
-                >
-                  <Send className="w-4 h-4" />
-                  <span>Send</span>
-                </button>
               </div>
             </div>
           )}
