@@ -125,17 +125,22 @@ export function Login({ onLogin }: LoginProps) {
       <div className="w-full max-w-lg space-y-5 relative z-10">
         
         {/* Brand Header */}
-        <div className="text-center space-y-1.5">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-[#0B2545] border-2 border-[#D4AF37] shadow-2xl p-1 mb-1">
-            <div className="w-full h-full bg-[#07172C] rounded-full flex items-center justify-center">
-              <Shield className="w-8 h-8 text-[#D4AF37]" />
-            </div>
+        <div className="text-center space-y-2">
+          <div className="inline-flex items-center justify-center p-1 mb-1">
+            <img 
+              src="/app-icon.jpg" 
+              alt="VajraNet Logo" 
+              className="w-16 h-16 rounded-2xl border-2 border-cyan-400/40 shadow-2xl object-cover"
+            />
           </div>
           <h1 className="text-2xl font-black text-white tracking-wide uppercase flex items-center justify-center gap-2">
             <span>VAJRANET</span>
-            <span className="text-[10px] bg-[#07172C] text-[#D4AF37] px-2 py-0.5 rounded-full border border-[#D4AF37]/50 font-mono">EOC</span>
+            <span className="text-[10px] bg-[#07172C] text-cyan-400 px-2 py-0.5 rounded-full border border-cyan-500/40 font-mono">EOC</span>
           </h1>
-          <p className="text-xs text-[#D4AF37] font-medium font-mono">
+          <p className="text-xs text-cyan-300 font-semibold font-mono tracking-wide">
+            "When Towers Fall, VajraNet Stands."
+          </p>
+          <p className="text-[11px] text-slate-400 font-medium">
             Emergency Operations & Disaster Response Command Platform
           </p>
         </div>

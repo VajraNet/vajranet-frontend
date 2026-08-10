@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Login } from './components/Login';
+import { DownloadAppPage } from './components/DownloadAppPage';
 
 // Common / Shared Components
 import { TacticalGISMap } from './components/common/TacticalGISMap';
@@ -143,6 +144,16 @@ export default function App() {
     }
   };
 
+  const [bypassDownloadPage, setBypassDownloadPage] = useState<boolean>(false);
+  const isDownloadPageActive = Boolean(
+    import.meta.env.VITE_MAINTENANCE_MODE === 'true' || 
+    import.meta.env.VITE_SHOW_DOWNLOAD_PAGE === 'true'
+  );
+
+  if (isDownloadPageActive && !bypassDownloadPage) {
+    return <DownloadAppPage onProceedToWeb={() => setBypassDownloadPage(true)} />;
+  }
+
   // 1. Unauthenticated View: Show Login Screen
   if (!isAuthenticated) {
     return (
@@ -200,16 +211,18 @@ export default function App() {
           : 'bg-white/95 backdrop-blur-md border-b border-slate-200 text-slate-900'
       }`}>
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-full bg-[#07172C] border border-[#D4AF37] flex items-center justify-center shadow-sm">
-              <Shield className="w-4 h-4 text-[#D4AF37]" />
-            </div>
+          <div className="flex items-center gap-2.5">
+            <img 
+              src="/app-icon.jpg" 
+              alt="VajraNet" 
+              className="w-7 h-7 rounded-lg border border-cyan-400/50 object-cover shadow-sm" 
+            />
             <span className={`font-black tracking-wider uppercase text-sm ${isDark ? 'text-white' : 'text-slate-900'}`}>
               VAJRANET
             </span>
-            <span className="text-[#D4AF37] font-mono text-[10px] font-bold">EOC</span>
+            <span className="text-cyan-400 font-mono text-[10px] font-bold">EOC</span>
             <span className="text-slate-500">|</span>
-            <span className="text-slate-400 font-mono hidden md:inline">Emergency Operations Command</span>
+            <span className="text-slate-400 font-mono hidden md:inline text-[11px]">When Towers Fall, VajraNet Stands.</span>
           </div>
         </div>
 
