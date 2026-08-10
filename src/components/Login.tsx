@@ -1,24 +1,34 @@
-import React, { useState } from 'react';
-import { Shield, Building2, HeartPulse, Lock, Mail, KeyRound, CheckCircle2, AlertCircle, ArrowRight, Sparkles } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Shield, Building2, HeartPulse, Lock, Mail, KeyRound, CheckCircle2, AlertCircle, ArrowRight, Sparkles, Fingerprint } from 'lucide-react';
+import { getOrCreateVajraId } from '../utils/vajraId';
 
 interface LoginProps {
-  onLogin: (userData: { name: string; role: string; token: string; email: string }) => void;
+  onLogin: (userData: { name: string; role: string; token: string; email: string; vajra_id?: string }) => void;
 }
 
 export function Login({ onLogin }: LoginProps) {
+  const [persistentVajraId, setPersistentVajraId] = useState<string>('');
+
   // Only two role options: 'GOVERNMENT' | 'VOLUNTEER'
   const [selectedRole, setSelectedRole] = useState<'GOVERNMENT' | 'VOLUNTEER'>('GOVERNMENT');
   
-  // Auth Mode: 'PASSWORD' | 'OTP'
-  const [authMode, setAuthMode] = useState<'PASSWORD' | 'OTP'>('PASSWORD');
+  // Auth Mode: 'PASSWORD' | 'OTP' | 'VAJRA_ID'
+  const [authMode, setAuthMode] = useState<'PASSWORD' | 'OTP' | 'VAJRA_ID'>('PASSWORD');
   
   // Input fields
   const [email, setEmail] = useState<string>('command.ndrf@disaster.gov.in');
   const [password, setPassword] = useState<string>('VajraCommand2026!');
   const [otp, setOtp] = useState<string>('829104');
+  const [inputVajraId, setInputVajraId] = useState<string>('');
   const [otpSent, setOtpSent] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+
+  useEffect(() => {
+    const id = getOrCreateVajraId();
+    setPersistentVajraId(id);
+    setInputVajraId(id);
+  }, []);
 
   // Government Domain Validator
   const isGovEmail = (emailStr: string): boolean => {
@@ -61,6 +71,44 @@ export function Login({ onLogin }: LoginProps) {
     e.preventDefault();
     setErrorMessage(null);
 
+    const finalVajraId = persistentVajraId || getOrCreateVajraId();
+
+    // Vajra ID direct sign in
+    if (authMode === 'VAJRA_ID') {
+      const cleanVajraId = inputVajraId.trim().toUpperCase();
+      if (!cleanVajraId) {
+        setErrorMessage('Please enter your Unique Vajra ID.');
+        return;
+      }
+      setIsLoading(true);
+      const displayName = selectedRole === 'GOVERNMENT'
+        ? `Gov Officer (${cleanVajraId.slice(-9)})`
+        : `Field Volunteer (${cleanVajraId.slice(-9)})`;
+      
+      const token = selectedRole === 'GOVERNMENT' ? 'mock-government-token' : 'mock-volunteer-token';
+      const emailGenerated = `${cleanVajraId.toLowerCase()}@vajranet.local`;
+
+      localStorage.setItem('vajranet_token', token);
+      localStorage.setItem('vajranet_user', JSON.stringify({
+        name: displayName,
+        role: selectedRole,
+        email: emailGenerated,
+        vajra_id: cleanVajraId
+      }));
+
+      setTimeout(() => {
+        setIsLoading(false);
+        onLogin({
+          name: displayName,
+          role: selectedRole,
+          token,
+          email: emailGenerated,
+          vajra_id: cleanVajraId
+        });
+      }, 350);
+      return;
+    }
+
     const cleanEmail = email.trim();
 
     // 1. Validate Government Email
@@ -100,7 +148,8 @@ export function Login({ onLogin }: LoginProps) {
     localStorage.setItem('vajranet_user', JSON.stringify({
       name: displayName,
       role: selectedRole,
-      email: cleanEmail
+      email: cleanEmail,
+      vajra_id: finalVajraId
     }));
 
     setTimeout(() => {
@@ -109,7 +158,8 @@ export function Login({ onLogin }: LoginProps) {
         name: displayName,
         role: selectedRole,
         token,
-        email: cleanEmail
+        email: cleanEmail,
+        vajra_id: finalVajraId
       });
     }, 350);
   };
@@ -118,219 +168,250 @@ export function Login({ onLogin }: LoginProps) {
     <div className="min-h-screen bg-gradient-to-b from-[#07172C] via-[#0E294B] to-[#07172C] flex flex-col justify-center items-center p-4 font-sans select-none relative overflow-hidden">
       
       {/* Background Ambient Glows */}
-      <div className="absolute top-1/4 -left-32 w-96 h-96 bg-[#0077B6]/20 rounded-full blur-[120px] pointer-events-none"></div>
-      <div className="absolute bottom-1/4 -right-32 w-96 h-96 bg-[#D4AF37]/15 rounded-full blur-[120px] pointer-events-none"></div>
+      <div className="absolute top-1/4 -left-32 w-96 h-96 bg-[#0077B6]/20 rounded-full blur-[140px] pointer-events-none"></div>
+      <div className="absolute bottom-1/4 -right-32 w-96 h-96 bg-cyan-500/15 rounded-full blur-[140px] pointer-events-none"></div>
 
-      {/* Main Container */}
-      <div className="w-full max-w-lg space-y-5 relative z-10">
+      <div className="max-w-md w-full space-y-6 relative z-10">
         
-        {/* Brand Header */}
+        {/* Brand Logo & Portal Header */}
         <div className="text-center space-y-2">
-          <div className="inline-flex items-center justify-center p-1 mb-1">
+          <div className="inline-flex items-center justify-center p-1 rounded-2xl bg-[#0B2545]/80 border border-cyan-400/50 shadow-2xl">
             <img 
               src="/app-icon.jpg" 
-              alt="VajraNet Logo" 
-              className="w-16 h-16 rounded-2xl border-2 border-cyan-400/40 shadow-2xl object-cover"
+              alt="VajraNet" 
+              className="w-14 h-14 rounded-xl shadow-inner object-cover" 
             />
           </div>
-          <h1 className="text-2xl font-black text-white tracking-wide uppercase flex items-center justify-center gap-2">
-            <span>VAJRANET</span>
-            <span className="text-[10px] bg-[#07172C] text-cyan-400 px-2 py-0.5 rounded-full border border-cyan-500/40 font-mono">EOC</span>
-          </h1>
-          <p className="text-xs text-cyan-300 font-semibold font-mono tracking-wide">
-            "When Towers Fall, VajraNet Stands."
-          </p>
-          <p className="text-[11px] text-slate-400 font-medium">
-            Emergency Operations & Disaster Response Command Platform
-          </p>
+
+          <div>
+            <div className="flex items-center justify-center gap-2">
+              <h1 className="text-2xl font-black text-white tracking-wider uppercase">VAJRANET</h1>
+              <span className="bg-[#0077B6] text-white text-[10px] font-mono font-bold px-2 py-0.5 rounded-full shadow-sm">
+                EOC v2.5
+              </span>
+            </div>
+            <p className="text-xs text-cyan-300 font-mono font-semibold mt-0.5">
+              "When Towers Fall, VajraNet Stands."
+            </p>
+          </div>
         </div>
 
-        {/* High-Contrast Crisp White Card */}
-        <div className="bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-200">
+        {/* Crisp Card with Role Tabs */}
+        <div className="bg-white/95 backdrop-blur-md rounded-3xl shadow-2xl border border-slate-200 p-6 space-y-5">
           
-          {/* 2 Role Tabs Switcher */}
-          <div className="grid grid-cols-2 bg-slate-100 border-b border-slate-200 text-xs font-bold">
-            <button
-              type="button"
-              onClick={() => handleRoleSwitch('GOVERNMENT')}
-              className={`py-3.5 px-3 flex items-center justify-center gap-2 transition cursor-pointer ${
-                selectedRole === 'GOVERNMENT'
-                  ? 'bg-[#0077B6] text-white shadow-md'
-                  : 'text-slate-600 hover:bg-slate-200/70'
-              }`}
-            >
-              <Building2 className="w-4 h-4" />
-              <span>🏛️ Command Authority</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleRoleSwitch('VOLUNTEER')}
-              className={`py-3.5 px-3 flex items-center justify-center gap-2 transition cursor-pointer ${
-                selectedRole === 'VOLUNTEER'
-                  ? 'bg-[#059669] text-white shadow-md'
-                  : 'text-slate-600 hover:bg-slate-200/70'
-              }`}
-            >
-              <HeartPulse className="w-4 h-4" />
-              <span>🤝 Volunteer & Responders</span>
-            </button>
+          {/* Permanent Device Unique ID Pill */}
+          <div className="bg-[#07172C] text-cyan-200 rounded-2xl p-3 border border-cyan-500/30 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Fingerprint className="w-4 h-4 text-cyan-400 animate-pulse" />
+              <div>
+                <span className="text-[9px] text-slate-400 font-mono block uppercase">Permanent Device Vajra ID</span>
+                <strong className="text-xs font-mono font-black text-white tracking-wider">
+                  {persistentVajraId || 'GENERATING...'}
+                </strong>
+              </div>
+            </div>
+            <span className="text-[9px] bg-cyan-950 text-cyan-300 border border-cyan-700/50 px-2 py-0.5 rounded font-mono font-bold">
+              1-DEVICE-1-ID
+            </span>
           </div>
 
-          {/* Card Body */}
-          <div className="p-6 sm:p-8 space-y-4">
-            
-            <p className="text-center text-xs text-slate-500 font-medium">
-              {selectedRole === 'GOVERNMENT' && 'Restricted Command Center Access (Requires .gov / .nic.in email)'}
-              {selectedRole === 'VOLUNTEER' && 'Registered NGOs, Field Medical Personnel & Volunteer Response Teams'}
-            </p>
-
-            {/* Validation Error Alert */}
-            {errorMessage && (
-              <div className="bg-rose-50 border border-rose-200 rounded-2xl p-3 text-xs text-rose-700 flex items-start gap-2 animate-fadeIn">
-                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-                <span>{errorMessage}</span>
-              </div>
-            )}
-
-            {/* Form */}
-            <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Role Selection Tabs */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-slate-700 font-mono uppercase tracking-wider block">
+              Select Authenticated Access Portal:
+            </label>
+            <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-2xl border border-slate-200">
               
-              {/* Email Input */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-slate-700">
-                    {selectedRole === 'GOVERNMENT' ? 'Official Government Email' : 'Email Address'}
-                  </label>
-                  {selectedRole === 'GOVERNMENT' && (
-                    <span className="text-[10px] text-[#0077B6] font-mono font-bold">.gov / .nic.in required</span>
-                  )}
-                </div>
-
-                <div className="relative">
-                  <input
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => {
-                      setEmail(e.target.value);
-                      setErrorMessage(null);
-                    }}
-                    placeholder={selectedRole === 'GOVERNMENT' ? 'officer.name@ndrf.gov.in' : 'volunteer@organization.org'}
-                    className={`w-full bg-slate-50 border rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none transition ${
-                      selectedRole === 'GOVERNMENT' && !isGovEmail(email) && email.length > 3
-                        ? 'border-amber-500 focus:border-amber-500 focus:bg-white'
-                        : 'border-slate-300 focus:border-[#0077B6] focus:bg-white'
-                    }`}
-                  />
-                  <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3 pointer-events-none" />
-                </div>
-              </div>
-
-              {/* Auth Method Switcher (Password vs OTP) */}
-              <div className="flex items-center justify-between pt-1">
-                <span className="text-xs font-bold text-slate-700">Authentication Method</span>
-                <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200 text-[11px] font-bold">
-                  <button
-                    type="button"
-                    onClick={() => setAuthMode('PASSWORD')}
-                    className={`px-3 py-1 rounded-lg transition cursor-pointer ${
-                      authMode === 'PASSWORD' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
-                    }`}
-                  >
-                    Password
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setAuthMode('OTP')}
-                    className={`px-3 py-1 rounded-lg transition cursor-pointer ${
-                      authMode === 'OTP' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
-                    }`}
-                  >
-                    Instant OTP
-                  </button>
-                </div>
-              </div>
-
-              {/* Option A: Password Field */}
-              {authMode === 'PASSWORD' && (
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700">Account Password</label>
-                  <div className="relative">
-                    <input
-                      type="password"
-                      required
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="••••••••••••"
-                      className="w-full bg-slate-50 border border-slate-300 rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#0077B6] focus:bg-white transition"
-                    />
-                    <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3 pointer-events-none" />
-                  </div>
-                </div>
-              )}
-
-              {/* Option B: OTP Field */}
-              {authMode === 'OTP' && (
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold text-slate-700">6-Digit Verification OTP</label>
-                    <button
-                      type="button"
-                      onClick={handleSendOtp}
-                      className="text-[11px] text-[#0077B6] hover:underline font-bold cursor-pointer"
-                    >
-                      {otpSent ? 'Resend OTP' : 'Request OTP Code'}
-                    </button>
-                  </div>
-
-                  <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-2.5 flex items-center justify-between text-xs text-emerald-800 font-mono">
-                    <span>Auto-filled OTP: <strong className="font-bold text-sm tracking-widest text-emerald-900">{otp}</strong></span>
-                    <span className="text-[10px] bg-[#059669] text-white px-2 py-0.5 rounded font-bold">READY</span>
-                  </div>
-
-                  <div className="relative">
-                    <input
-                      type="text"
-                      maxLength={6}
-                      value={otp}
-                      onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
-                      placeholder="829104"
-                      className="w-full bg-slate-50 border border-slate-300 rounded-xl pl-10 pr-4 py-2.5 text-sm font-mono tracking-widest text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#0077B6] focus:bg-white text-center font-bold"
-                    />
-                    <KeyRound className="w-4 h-4 text-slate-400 absolute left-3.5 top-3 pointer-events-none" />
-                  </div>
-                </div>
-              )}
-
-              {/* Submit Button */}
+              {/* Government Command Button */}
               <button
-                type="submit"
-                disabled={isLoading}
-                className={`w-full py-3.5 text-white font-bold text-sm rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                type="button"
+                onClick={() => handleRoleSwitch('GOVERNMENT')}
+                className={`py-3 px-3 rounded-xl flex items-center justify-center gap-2 transition cursor-pointer font-bold text-xs ${
                   selectedRole === 'GOVERNMENT'
-                    ? 'bg-[#0077B6] hover:bg-[#005f92] shadow-blue-600/20'
-                    : 'bg-[#059669] hover:bg-[#047857] shadow-emerald-600/20'
+                    ? 'bg-[#0077B6] text-white shadow-md'
+                    : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                {isLoading ? (
-                  <span>Authenticating Command Session...</span>
-                ) : (
-                  <>
-                    <span>Enter {selectedRole === 'GOVERNMENT' ? 'Command Authority' : 'Volunteer Portal'} →</span>
-                  </>
-                )}
+                <Building2 className="w-4 h-4" />
+                <span>🏛️ Govt EOC</span>
               </button>
 
-            </form>
-
+              {/* Volunteer Operations Button */}
+              <button
+                type="button"
+                onClick={() => handleRoleSwitch('VOLUNTEER')}
+                className={`py-3 px-3 rounded-xl flex items-center justify-center gap-2 transition cursor-pointer font-bold text-xs ${
+                  selectedRole === 'VOLUNTEER'
+                    ? 'bg-[#059669] text-white shadow-md'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <HeartPulse className="w-4 h-4" />
+                <span>🤝 Volunteer Force</span>
+              </button>
+            </div>
           </div>
+
+          {/* Sub-Tabs: Password / OTP / Vajra ID */}
+          <div className="flex border-b border-slate-200 text-xs font-mono font-bold">
+            <button
+              type="button"
+              onClick={() => { setAuthMode('PASSWORD'); setErrorMessage(null); }}
+              className={`flex-1 py-2 text-center border-b-2 transition cursor-pointer ${
+                authMode === 'PASSWORD' ? 'border-[#0077B6] text-[#0077B6]' : 'border-transparent text-slate-400 hover:text-slate-600'
+              }`}
+            >
+              Password
+            </button>
+            <button
+              type="button"
+              onClick={() => { setAuthMode('OTP'); setErrorMessage(null); }}
+              className={`flex-1 py-2 text-center border-b-2 transition cursor-pointer ${
+                authMode === 'OTP' ? 'border-[#0077B6] text-[#0077B6]' : 'border-transparent text-slate-400 hover:text-slate-600'
+              }`}
+            >
+              One-Time OTP
+            </button>
+            <button
+              type="button"
+              onClick={() => { setAuthMode('VAJRA_ID'); setErrorMessage(null); }}
+              className={`flex-1 py-2 text-center border-b-2 transition cursor-pointer ${
+                authMode === 'VAJRA_ID' ? 'border-[#0077B6] text-[#0077B6]' : 'border-transparent text-slate-400 hover:text-slate-600'
+              }`}
+            >
+              Vajra ID
+            </button>
+          </div>
+
+          {/* Error Banner */}
+          {errorMessage && (
+            <div className="bg-rose-50 border border-rose-200 rounded-xl p-3 text-xs text-rose-700 flex items-start gap-2 animate-fadeIn">
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+              <span>{errorMessage}</span>
+            </div>
+          )}
+
+          {/* Main Login Form */}
+          <form onSubmit={handleSubmit} className="space-y-4">
+            
+            {/* METHOD: VAJRA ID DIRECT */}
+            {authMode === 'VAJRA_ID' ? (
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-slate-700">Unique Vajra ID</label>
+                <div className="relative">
+                  <Fingerprint className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                  <input
+                    type="text"
+                    required
+                    placeholder="VAJRA-USR-ABC-12345"
+                    value={inputVajraId}
+                    onChange={(e) => setInputVajraId(e.target.value.toUpperCase())}
+                    className="w-full bg-slate-50 border border-slate-300 focus:border-[#0077B6] focus:bg-white rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-900 font-mono tracking-wider focus:outline-none transition"
+                  />
+                </div>
+                <p className="text-[10px] text-slate-500">Auto-filled with this device's permanent Vajra ID for 1-click sign in.</p>
+              </div>
+            ) : (
+              <>
+                {/* Email Input */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-700">
+                      {selectedRole === 'GOVERNMENT' ? 'Official Government Email' : 'Volunteer / NGO Email'}
+                    </label>
+                    {selectedRole === 'GOVERNMENT' && (
+                      <span className="text-[10px] text-[#0077B6] font-mono font-bold">.gov / .gov.in Required</span>
+                    )}
+                  </div>
+                  <div className="relative">
+                    <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                    <input
+                      type="email"
+                      required
+                      placeholder={selectedRole === 'GOVERNMENT' ? 'command.officer@ndrf.gov.in' : 'volunteer@redcross.org'}
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-300 focus:border-[#0077B6] focus:bg-white rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-900 focus:outline-none transition"
+                    />
+                  </div>
+                </div>
+
+                {/* Password Input */}
+                {authMode === 'PASSWORD' && (
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-bold text-slate-700">Secure Passkey / Password</label>
+                    <div className="relative">
+                      <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                      <input
+                        type="password"
+                        required
+                        placeholder="••••••••••••"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-300 focus:border-[#0077B6] focus:bg-white rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-900 focus:outline-none transition"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* OTP Input */}
+                {authMode === 'OTP' && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-slate-700">6-Digit Verification OTP</label>
+                      {!otpSent ? (
+                        <button
+                          type="button"
+                          onClick={handleSendOtp}
+                          className="text-[11px] text-[#0077B6] hover:underline font-bold"
+                        >
+                          Request OTP
+                        </button>
+                      ) : (
+                        <span className="text-[10px] bg-emerald-100 text-emerald-800 font-mono px-2 py-0.5 rounded font-bold">
+                          OTP SENT
+                        </span>
+                      )}
+                    </div>
+                    <div className="relative">
+                      <KeyRound className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                      <input
+                        type="text"
+                        maxLength={6}
+                        placeholder="829104"
+                        value={otp}
+                        onChange={(e) => setOtp(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-300 focus:border-[#0077B6] focus:bg-white rounded-xl pl-10 pr-4 py-2.5 text-sm font-mono tracking-widest text-slate-900 focus:outline-none transition"
+                      />
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Submit Button */}
+            <button
+              type="submit"
+              disabled={isLoading}
+              className={`w-full py-3.5 rounded-xl font-bold text-xs text-white shadow-lg transition flex items-center justify-center gap-2 cursor-pointer active:scale-95 ${
+                selectedRole === 'GOVERNMENT'
+                  ? 'bg-[#0077B6] hover:bg-[#005f92] shadow-blue-900/30'
+                  : 'bg-[#059669] hover:bg-[#047857] shadow-emerald-900/30'
+              }`}
+            >
+              <span>
+                {isLoading 
+                  ? 'Authenticating...' 
+                  : `Sign In to ${selectedRole === 'GOVERNMENT' ? 'Government Command' : 'Volunteer Portal'} →`}
+              </span>
+            </button>
+          </form>
 
         </div>
 
-        {/* Footer Security Badges */}
+        {/* Footer */}
         <p className="text-center text-[10px] text-slate-400 font-mono">
-          VajraNet EOC Protocol v2.4 • 256-Bit TLS Protected Command Relay
+          VajraNet RBAC Security Engine • Role-Segregated Command Architecture
         </p>
 
       </div>
