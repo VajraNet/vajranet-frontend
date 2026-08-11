@@ -145,6 +145,56 @@ export default function App() {
   const isGovtUser = user.role === 'GOVERNMENT' || user.role === 'ADMIN';
   const isVolunteerUser = user.role === 'VOLUNTEER';
 
+  const [liveCounts, setLiveCounts] = useState({
+    sosCount: 0,
+    incidentsCount: 0,
+    tasksCount: 0,
+    sheltersCount: 0
+  });
+
+  React.useEffect(() => {
+    async function pollLiveCounts() {
+      try {
+        const [sosRes, incRes, taskRes, shelterRes] = await Promise.allSettled([
+          apiClient.get('/sos'),
+          apiClient.get('/incidents'),
+          apiClient.get('/volunteers/tasks'),
+          apiClient.get('/resources/shelters')
+        ]);
+
+        let sos = 0, inc = 0, tasks = 0, shelters = 0;
+
+        if (sosRes.status === 'fulfilled') {
+          const d = sosRes.value.data?.data || sosRes.value.data;
+          if (Array.isArray(d)) sos = d.length;
+        }
+        if (incRes.status === 'fulfilled') {
+          const d = incRes.value.data?.data || incRes.value.data;
+          if (Array.isArray(d)) inc = d.length;
+        }
+        if (taskRes.status === 'fulfilled') {
+          const d = taskRes.value.data?.data || taskRes.value.data;
+          if (Array.isArray(d)) tasks = d.length;
+        }
+        if (shelterRes.status === 'fulfilled') {
+          const d = shelterRes.value.data?.data || shelterRes.value.data;
+          if (Array.isArray(d)) shelters = d.length;
+        }
+
+        setLiveCounts({
+          sosCount: sos,
+          incidentsCount: inc,
+          tasksCount: tasks,
+          sheltersCount: shelters
+        });
+      } catch (e) {}
+    }
+
+    pollLiveCounts();
+    const interval = setInterval(pollLiveCounts, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
   const handleLogout = () => {
     localStorage.removeItem('vajranet_token');
     localStorage.removeItem('vajranet_user');
@@ -155,10 +205,10 @@ export default function App() {
   // Sidebar Menu Items for Government Command
   const govtNavItems: { id: GovtTab; label: string; icon: any; count?: number; badgeColor?: string }[] = [
     { id: 'OVERVIEW', label: 'Overview', icon: LayoutDashboard },
-    { id: 'SOS', label: 'Citizen SOS Alerts', icon: ShieldAlert, count: 24, badgeColor: 'bg-red-950 text-red-400 border-red-800' },
-    { id: 'INCIDENTS', label: 'Incident Feed', icon: Flame, count: 17, badgeColor: 'bg-amber-950 text-amber-400 border-amber-800' },
+    { id: 'SOS', label: 'Citizen SOS Alerts', icon: ShieldAlert, count: liveCounts.sosCount, badgeColor: 'bg-red-950 text-red-400 border-red-800' },
+    { id: 'INCIDENTS', label: 'Incident Feed', icon: Flame, count: liveCounts.incidentsCount, badgeColor: 'bg-amber-950 text-amber-400 border-amber-800' },
     { id: 'ANNOUNCEMENTS', label: 'Announcements', icon: Radio },
-    { id: 'SHELTERS', label: 'Shelters', icon: Home },
+    { id: 'SHELTERS', label: 'Shelters', icon: Home, count: liveCounts.sheltersCount || undefined, badgeColor: 'bg-emerald-950 text-emerald-400 border-emerald-800' },
     { id: 'HOSPITALS', label: 'Hospitals', icon: HeartPulse },
     { id: 'RELIEF', label: 'Relief Centers', icon: Package },
     { id: 'MAP', label: 'Tactical GIS Map', icon: MapIcon },
@@ -167,10 +217,10 @@ export default function App() {
   // Sidebar Menu Items for Volunteer / Private Bodies (Now with Live Citizen SOS feed)
   const volNavItems: { id: VolTab; label: string; icon: any; count?: number; badgeColor?: string }[] = [
     { id: 'OVERVIEW', label: 'Overview', icon: LayoutDashboard },
-    { id: 'SOS', label: 'Live Citizen SOS Calls', icon: ShieldAlert, count: 24, badgeColor: 'bg-red-950 text-red-400 border-red-800' },
-    { id: 'INCIDENTS', label: 'Available Incidents', icon: Flame, count: 7, badgeColor: 'bg-amber-950 text-amber-400 border-amber-800' },
-    { id: 'TASKS', label: 'My Response Tasks', icon: CheckSquare, count: 2, badgeColor: 'bg-emerald-950 text-emerald-400 border-emerald-800' },
-    { id: 'SHELTERS', label: 'Private Shelters', icon: Home },
+    { id: 'SOS', label: 'Live Citizen SOS Calls', icon: ShieldAlert, count: liveCounts.sosCount, badgeColor: 'bg-red-950 text-red-400 border-red-800' },
+    { id: 'INCIDENTS', label: 'Available Incidents', icon: Flame, count: liveCounts.incidentsCount, badgeColor: 'bg-amber-950 text-amber-400 border-amber-800' },
+    { id: 'TASKS', label: 'My Response Tasks', icon: CheckSquare, count: liveCounts.tasksCount, badgeColor: 'bg-emerald-950 text-emerald-400 border-emerald-800' },
+    { id: 'SHELTERS', label: 'Private Shelters', icon: Home, count: liveCounts.sheltersCount || undefined, badgeColor: 'bg-emerald-950 text-emerald-400 border-emerald-800' },
     { id: 'HOSPITALS', label: 'Private Hospitals', icon: HeartPulse },
     { id: 'FUNDRAISERS', label: 'Relief Campaigns', icon: DollarSign },
     { id: 'OFFLINE_SYNC', label: 'Mesh & Offline Sync', icon: Radio },

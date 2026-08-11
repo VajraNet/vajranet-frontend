@@ -118,6 +118,37 @@ export function OfflineMeshSync() {
   const [syncHistory, setSyncHistory] = useState<any[]>([]);
   const [syncStatusMsg, setSyncStatusMsg] = useState<string | null>(null);
 
+  React.useEffect(() => {
+    let channel: BroadcastChannel | null = null;
+    try {
+      channel = new BroadcastChannel('vajranet_p2p_mesh_bus');
+      channel.onmessage = (event) => {
+        const data = event.data || {};
+        if (data.type === 'NEARBY_PAYLOAD' || data.type === 'INCIDENT_BROADCAST' || data.message) {
+          const p = data.payload || {};
+          const isSos = (data.type === 'NEARBY_PAYLOAD' && p.type === 'SOS') || Boolean(data.message?.includes('SOS'));
+          const newPacket = {
+            message_id: p.id || p.message_id || `LIVE-MESH-${Date.now()}`,
+            type: isSos ? 'SOS' : 'INCIDENT',
+            origin: data.senderId || data.senderName || 'Disaster Mesh Peer',
+            hops: 1,
+            timestamp: new Date().toLocaleTimeString(),
+            summary: isSos ? (p.content || data.message || 'Live Citizen SOS Beacon') : (p.title || 'Field Disaster Hazard'),
+            payload: p
+          };
+          setQueuedPackets(prev => {
+            if (prev.some(item => item.message_id === newPacket.message_id)) return prev;
+            return [newPacket, ...prev];
+          });
+        }
+      };
+    } catch (e) {}
+
+    return () => {
+      if (channel) channel.close();
+    };
+  }, []);
+
   // Trigger Real API Call to /api/v1/gateway/sync
   async function triggerMeshSync() {
     if (queuedPackets.length === 0 || isSyncing) return;

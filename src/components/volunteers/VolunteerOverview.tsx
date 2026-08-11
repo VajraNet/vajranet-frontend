@@ -24,6 +24,35 @@ interface VolunteerOverviewProps {
 export function VolunteerOverview({ onNavigateTab }: VolunteerOverviewProps) {
   const [isOnDuty, setIsOnDuty] = useState(true);
   const [activeTaskStatus, setActiveTaskStatus] = useState<'IN_PROGRESS' | 'COMPLETED'>('IN_PROGRESS');
+  const [availableIncidentsCount, setAvailableIncidentsCount] = useState<number>(0);
+  const [myTasksCount, setMyTasksCount] = useState<number>(0);
+
+  React.useEffect(() => {
+    async function fetchCounts() {
+      try {
+        const [incRes, taskRes] = await Promise.allSettled([
+          apiClient.get('/incidents'),
+          apiClient.get('/volunteers/tasks')
+        ]);
+
+        if (incRes.status === 'fulfilled') {
+          const data = incRes.value.data?.data || incRes.value.data;
+          if (Array.isArray(data)) setAvailableIncidentsCount(data.length);
+        }
+
+        if (taskRes.status === 'fulfilled') {
+          const data = taskRes.value.data?.data || taskRes.value.data;
+          if (Array.isArray(data)) setMyTasksCount(data.length);
+        }
+      } catch (e) {
+        console.warn('Volunteer counts fetch note', e);
+      }
+    }
+
+    fetchCounts();
+    const interval = setInterval(fetchCounts, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -78,7 +107,7 @@ export function VolunteerOverview({ onNavigateTab }: VolunteerOverviewProps) {
             </div>
           </div>
           <div className="mt-3 flex items-baseline justify-between">
-            <span className="text-3xl font-black text-white">7</span>
+            <span className="text-3xl font-black text-white">{availableIncidentsCount}</span>
             <span className="text-xs text-amber-400 flex items-center gap-1 font-bold group-hover:translate-x-1 transition">
               Claim Tasks →
             </span>
@@ -98,7 +127,7 @@ export function VolunteerOverview({ onNavigateTab }: VolunteerOverviewProps) {
             </div>
           </div>
           <div className="mt-3 flex items-baseline justify-between">
-            <span className="text-3xl font-black text-white">2</span>
+            <span className="text-3xl font-black text-white">{myTasksCount}</span>
             <span className="text-xs text-emerald-400 flex items-center gap-1 font-bold group-hover:translate-x-1 transition">
               Update Progress →
             </span>

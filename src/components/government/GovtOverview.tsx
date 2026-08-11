@@ -27,13 +27,29 @@ export function GovtOverview({ onNavigateTab }: GovtOverviewProps) {
   useEffect(() => {
     async function fetchOverview() {
       try {
+        let sosCount = 0;
+        let incCount = 0;
+        try {
+          const sosList = await governmentApi.getSOSList();
+          if (Array.isArray(sosList)) sosCount = sosList.length;
+        } catch (e) {}
+
+        try {
+          const incList = await governmentApi.getIncidents();
+          if (Array.isArray(incList)) incCount = incList.length;
+        } catch (e) {}
+
         const data = await governmentApi.getOverview();
-        setOverview(data);
-      } catch {
         setOverview({
-          active_sos_count: 24,
-          active_incidents_count: 17,
-          critical_incidents_count: 5,
+          ...data,
+          active_sos_count: Math.max(data.active_sos_count || 0, sosCount),
+          active_incidents_count: Math.max(data.active_incidents_count || 0, incCount)
+        });
+      } catch {
+        setOverview(prev => prev || {
+          active_sos_count: 0,
+          active_incidents_count: 0,
+          critical_incidents_count: 0,
           total_shelter_capacity: 1200,
           total_shelter_occupied: 780,
           available_hospital_beds: 142,
@@ -44,6 +60,8 @@ export function GovtOverview({ onNavigateTab }: GovtOverviewProps) {
       }
     }
     fetchOverview();
+    const interval = setInterval(fetchOverview, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   const recentCriticalEvents = [
