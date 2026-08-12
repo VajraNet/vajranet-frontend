@@ -5,11 +5,19 @@ const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || 'https://vaj
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
   headers: {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${localStorage.getItem('vajranet_token') || 'mock-government-token'}`
+    'Content-Type': 'application/json'
   },
   timeout: 10000,
 });
+
+apiClient.interceptors.request.use((config) => {
+  const token = localStorage.getItem('vajranet_token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
 
 // Automatic response interceptor to unwrap VajraNet standard { success: true, data: ... } envelope
 apiClient.interceptors.response.use(
@@ -25,6 +33,10 @@ apiClient.interceptors.response.use(
     return response;
   },
   (error) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem('vajranet_token');
+      window.location.reload();
+    }
     return Promise.reject(error);
   }
 );

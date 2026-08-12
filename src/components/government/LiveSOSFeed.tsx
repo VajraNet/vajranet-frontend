@@ -5,41 +5,35 @@ import { governmentApi } from '../../api/government';
 export function LiveSOSFeed() {
   const [sosList, setSosList] = useState<SOSPayload[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const [timeSinceUpdate, setTimeSinceUpdate] = useState<number>(0);
 
   useEffect(() => {
     fetchSOS();
+    const interval = setInterval(fetchSOS, 30000);
+    return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTimeSinceUpdate(Math.floor((new Date().getTime() - lastUpdated.getTime()) / 1000));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [lastUpdated]);
 
   async function fetchSOS() {
     try {
       const data = await governmentApi.getSOSList();
-      if (Array.isArray(data) && data.length > 0) {
+      if (Array.isArray(data)) {
         setSosList(data);
+        setError(null);
+        setLastUpdated(new Date());
       } else {
         throw new Error('Empty SOS list');
       }
-    } catch (err) {
-      // Demo state if backend API has no records yet
-      setSosList([
-        {
-          id: 'sos-101',
-          citizen_id: 'cit-882',
-          location: { zone: 'Zone 4 - Riverbank', address: '12-B Riverside Road' },
-          severity: 'CRITICAL',
-          message: 'Family of 4 trapped on top roof due to rising water level!',
-          status: 'ACTIVE',
-          created_at: new Date().toISOString(),
-        },
-        {
-          id: 'sos-102',
-          citizen_id: 'cit-911',
-          location: { zone: 'Zone 2 - Central', address: 'Market Square Block C' },
-          severity: 'HIGH',
-          message: 'Senior citizen requires urgent medical oxygen supply.',
-          status: 'ACKNOWLEDGED',
-          created_at: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
-        },
-      ]);
+    } catch (err: any) {
+      setError(err.message || 'Failed to fetch SOS signals');
     } finally {
       setLoading(false);
     }
@@ -74,8 +68,17 @@ export function LiveSOSFeed() {
     }
   };
 
-  if (loading) {
+  if (loading && sosList.length === 0) {
     return <div className="p-6 text-slate-400">Loading incoming SOS distress signals...</div>;
+  }
+
+  if (error && sosList.length === 0) {
+    return (
+      <div className="p-6 text-red-400 bg-red-950/20 border border-red-900/50 rounded-lg">
+        <p className="font-bold">Error loading feed</p>
+        <p className="text-sm">{error}</p>
+      </div>
+    );
   }
 
   const safeSosList = Array.isArray(sosList) ? sosList : [];
@@ -89,6 +92,9 @@ export function LiveSOSFeed() {
           </h2>
           <p className="text-xs text-slate-400 mt-0.5">
             Incoming high-priority emergency distress broadcasts requiring immediate operator dispatch.
+          </p>
+          <p className="text-xs text-slate-500 mt-1">
+            (Auto-polling every 30s) Last updated: {timeSinceUpdate} seconds ago
           </p>
         </div>
         <button

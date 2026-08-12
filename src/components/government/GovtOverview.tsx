@@ -23,6 +23,7 @@ interface GovtOverviewProps {
 export function GovtOverview({ onNavigateTab }: GovtOverviewProps) {
   const [overview, setOverview] = useState<GovernmentOverview | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchOverview() {
@@ -45,15 +46,17 @@ export function GovtOverview({ onNavigateTab }: GovtOverviewProps) {
           active_sos_count: Math.max(data.active_sos_count || 0, sosCount),
           active_incidents_count: Math.max(data.active_incidents_count || 0, incCount)
         });
-      } catch {
-        setOverview(prev => prev || {
+        setError(null);
+      } catch (err: any) {
+        setError(err.message || 'Failed to load government overview');
+        setOverview({
           active_sos_count: 0,
           active_incidents_count: 0,
           critical_incidents_count: 0,
-          total_shelter_capacity: 1200,
-          total_shelter_occupied: 780,
-          available_hospital_beds: 142,
-          available_icu_beds: 18,
+          total_shelter_capacity: 0,
+          total_shelter_occupied: 0,
+          available_hospital_beds: 0,
+          available_icu_beds: 0,
         });
       } finally {
         setLoading(false);
@@ -98,6 +101,19 @@ export function GovtOverview({ onNavigateTab }: GovtOverviewProps) {
       nav: 'SHELTERS' as const
     }
   ];
+
+  if (loading && !overview) {
+    return <div className="p-6 text-slate-400">Loading overview data...</div>;
+  }
+
+  if (error) {
+    return (
+      <div className="p-6 text-red-400 bg-red-950/20 border border-red-900/50 rounded-lg">
+        <p className="font-bold">Error loading overview</p>
+        <p className="text-sm">{error}</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
