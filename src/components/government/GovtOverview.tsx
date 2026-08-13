@@ -13,6 +13,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { TacticalGISMap } from '../common/TacticalGISMap';
+import { TrustedDeviceManager } from './TrustedDeviceManager';
 import { governmentApi } from '../../api/government';
 import { GovernmentOverview } from '../../types/api';
 
@@ -257,6 +258,9 @@ export function GovtOverview({ onNavigateTab }: GovtOverviewProps) {
           ))}
         </div>
       </div>
+
+      {/* Trusted SMS Relay Devices Management Section */}
+      <TrustedDeviceManager />
 
     </div>
   );

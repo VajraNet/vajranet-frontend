@@ -105,4 +105,27 @@ export const governmentApi = {
     const res = await apiClient.patch(`/government/relief-centers/${id}`, data);
     return res.data;
   },
+
+  deleteReliefCenter: async (id: string): Promise<void> => {
+    await apiClient.delete(`/relief-centers/${id}`);
+  },
+
+  getTrustedDevices: async (): Promise<any[]> => {
+    const res = await apiClient.get('/devices/trusted/');
+    return ensureArray(res.data);
+  },
+
+  registerTrustedDevice: async (data: { name: string; phone: string; role?: string; latitude?: number; longitude?: number }): Promise<any> => {
+    const res = await apiClient.post('/devices/trusted/', data);
+    return res.data;
+  },
+
+  deleteTrustedDevice: async (id: string): Promise<void> => {
+    await apiClient.delete(`/devices/trusted/${id}`);
+  },
+
+  relaySosPayload: async (payload: any): Promise<any> => {
+    const res = await apiClient.post('/devices/trusted/relay-sos', payload);
+    return res.data;
+  }
 };
