@@ -43,8 +43,9 @@ export const TrustedDeviceManager: React.FC = () => {
       setFormData({ name: '', phone: '', role: 'GOVERNMENT', latitude: 12.9716, longitude: 77.5946 });
       setShowAddForm(false);
       loadTrustedDevices();
-    } catch (err) {
-      setStatusMsg('❌ Failed to register device. Verify role permissions.');
+    } catch (err: any) {
+      const serverErr = err.response?.data?.detail || err.message || 'Verify role permissions.';
+      setStatusMsg(`❌ Failed to register device: ${serverErr}`);
     } finally {
       setSubmitting(false);
     }
