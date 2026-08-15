@@ -29,16 +29,38 @@ export function ReliefFundraisers() {
     organizer: 'VajraNet Volunteer Squad / NGO',
   });
 
+  // Helper to load raised amounts cache
+  const getRaisedOverrides = (): Record<string, number> => {
+    try {
+      const saved = localStorage.getItem('vajranet_fundraiser_raised_cache');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  };
+
+  const getLocalUserCampaigns = (): Fundraiser[] => {
+    try {
+      const saved = localStorage.getItem('vajranet_user_fundraisers');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  };
+
   const fetchCampaigns = async () => {
     setLoading(true);
+    const raisedMap = getRaisedOverrides();
+    const localUserCamps = getLocalUserCampaigns();
+
     try {
       const res = await apiClient.get('/volunteers/fundraisers');
       const data = res.data?.data || res.data;
+      let combined: Fundraiser[] = [];
       if (Array.isArray(data) && data.length > 0) {
-        setCampaigns(data);
+        combined = [...data];
       } else {
-        // Fallback default verified campaigns
-        setCampaigns([
+        combined = [
           {
             id: 'fund-1',
             title: 'Sector 4 Clean Water Purification Units',
@@ -57,10 +79,31 @@ export function ReliefFundraisers() {
             description: 'Procuring essential insulin, asthma inhalers, and sterile dressings for shelter victims.',
             status: 'ACTIVE'
           }
-        ]);
+        ];
       }
+
+      // Merge user created campaigns if not present
+      localUserCamps.forEach(uc => {
+        if (!combined.some(c => c.id === uc.id)) {
+          combined.unshift(uc);
+        }
+      });
+
+      // Apply raised amount overrides
+      const finalized = combined.map(c => {
+        const customRaised = raisedMap[c.id];
+        const baseRaised = Number(c.raised_amount ?? c.raisedAmount ?? 0);
+        const actualRaised = customRaised !== undefined ? customRaised : baseRaised;
+        return {
+          ...c,
+          raised_amount: actualRaised,
+          raisedAmount: actualRaised,
+        };
+      });
+
+      setCampaigns(finalized);
     } catch {
-      setCampaigns([
+      const defaults = [
         {
           id: 'fund-1',
           title: 'Sector 4 Clean Water Purification Units',
@@ -69,8 +112,25 @@ export function ReliefFundraisers() {
           raised_amount: 34500,
           description: 'Funding 10 portable water purification units for flooded residential sectors.',
           status: 'ACTIVE'
+        },
+        {
+          id: 'fund-2',
+          title: 'Emergency Medical & Insulin Supply Line',
+          organizer: 'Red Cross Field Volunteer Corps',
+          target_amount: 75000,
+          raised_amount: 48200,
+          description: 'Procuring essential insulin, asthma inhalers, and sterile dressings for shelter victims.',
+          status: 'ACTIVE'
         }
-      ]);
+      ];
+
+      const merged = [...localUserCamps, ...defaults].map(c => ({
+        ...c,
+        raised_amount: raisedMap[c.id] ?? Number(c.raised_amount ?? c.raisedAmount ?? 0),
+        raisedAmount: raisedMap[c.id] ?? Number(c.raised_amount ?? c.raisedAmount ?? 0),
+      }));
+
+      setCampaigns(merged);
     } finally {
       setLoading(false);
     }
@@ -86,18 +146,35 @@ export function ReliefFundraisers() {
 
     setSubmitting(true);
     try {
-      const newCamp = {
+      const newCamp: Fundraiser = {
         id: `fund-${Date.now()}`,
         title: form.title.trim(),
         description: form.description.trim(),
-        target_amount: Number(form.target_amount) || 10000,
+        target_amount: Number(form.target_amount) || 50000,
         raised_amount: Number(form.raised_amount) || 0,
-        organizer: form.organizer.trim() || 'VajraNet Volunteer Squad',
+        organizer: form.organizer.trim() || 'VajraNet Volunteer Squad / NGO',
         status: 'ACTIVE'
       };
 
+      // Save locally
       try {
-        await apiClient.post('/volunteers/fundraisers', newCamp);
+        const existing = getLocalUserCampaigns();
+        localStorage.setItem('vajranet_user_fundraisers', JSON.stringify([newCamp, ...existing]));
+      } catch {}
+
+      try {
+        const payload = {
+          title: newCamp.title,
+          description: newCamp.description,
+          target_amount: newCamp.target_amount,
+          raised_amount: newCamp.raised_amount,
+          beneficiary: newCamp.organizer,
+        };
+        const res = await apiClient.post('/volunteers/fundraisers', payload);
+        const created = res.data?.data || res.data;
+        if (created && created.id) {
+          newCamp.id = created.id;
+        }
       } catch (err) {
         console.warn('Backend fundraiser sync fallback to local state', err);
       }
@@ -118,14 +195,30 @@ export function ReliefFundraisers() {
   };
 
   const handleQuickContribute = async (id: string, amount: number) => {
+    let updatedRaised = 0;
     setCampaigns(prev => prev.map(c => {
       if (c.id === id) {
         const currentRaised = Number(c.raised_amount ?? c.raisedAmount ?? 0);
-        const updated = currentRaised + amount;
-        return { ...c, raised_amount: updated, raisedAmount: updated };
+        updatedRaised = currentRaised + amount;
+        return { ...c, raised_amount: updatedRaised, raisedAmount: updatedRaised };
       }
       return c;
     }));
+
+    // Persist in localStorage
+    try {
+      const overrides = getRaisedOverrides();
+      overrides[id] = updatedRaised;
+      localStorage.setItem('vajranet_fundraiser_raised_cache', JSON.stringify(overrides));
+    } catch {}
+
+    // Persist to backend database
+    try {
+      await apiClient.patch(`/volunteers/fundraisers/${id}`, { raised_amount: updatedRaised });
+    } catch (err) {
+      console.warn('Failed to patch fundraiser raised amount on backend:', err);
+    }
+
     window.dispatchEvent(new CustomEvent('vajranet_data_updated'));
   };
 

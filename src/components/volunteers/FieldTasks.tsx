@@ -86,14 +86,9 @@ export function FieldTasks() {
     window.dispatchEvent(new CustomEvent('vajranet_data_updated'));
 
     try {
-      await Promise.any([
-        apiClient.patch(`/volunteers/tasks/${taskId}`, { status: newStatus }),
-        apiClient.patch(`/volunteers/incidents/${taskId}/status`, { status: newStatus }),
-        apiClient.patch(`/incidents/${taskId}`, { status: newStatus }),
-        apiClient.patch(`/government/incidents/${taskId}`, { status: newStatus })
-      ]);
+      await apiClient.patch(`/volunteers/tasks/${taskId}`, { status: newStatus });
     } catch (e) {
-      console.warn('Task status update synced locally', e);
+      console.warn('Task status update synced locally:', e);
     }
   }
 

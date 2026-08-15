@@ -11,7 +11,14 @@ export function IncidentList() {
   const [typeFilter, setTypeFilter] = useState<string>('ALL');
   const [severityFilter, setSeverityFilter] = useState<string>('ALL');
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
-  const [assignedIncidentIds, setAssignedIncidentIds] = useState<Set<string>>(new Set());
+  const [assignedIncidentIds, setAssignedIncidentIds] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem('vajranet_dispatched_incidents');
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
 
   useEffect(() => {
     fetchIncidents();
@@ -27,6 +34,25 @@ export function IncidentList() {
       } else {
         setIncidents([]);
       }
+
+      // Sync dispatched tasks from backend
+      try {
+        const tasksRes = await apiClient.get('/volunteers/tasks');
+        const tasks = tasksRes.data?.data || tasksRes.data;
+        if (Array.isArray(tasks)) {
+          const taskIncidentIds = tasks.map((t: any) => t.incident_id || t.id).filter(Boolean);
+          if (taskIncidentIds.length > 0) {
+            setAssignedIncidentIds((prev) => {
+              const updated = new Set(prev);
+              taskIncidentIds.forEach((id: string) => updated.add(id));
+              try {
+                localStorage.setItem('vajranet_dispatched_incidents', JSON.stringify(Array.from(updated)));
+              } catch {}
+              return updated;
+            });
+          }
+        }
+      } catch {}
     } catch (err) {
       setIncidents([]);
     } finally {
@@ -49,6 +75,12 @@ export function IncidentList() {
   }
 
   async function handleAssignVolunteers(incidentId: string) {
+    const nextSet = new Set(assignedIncidentIds).add(incidentId);
+    setAssignedIncidentIds(nextSet);
+    try {
+      localStorage.setItem('vajranet_dispatched_incidents', JSON.stringify(Array.from(nextSet)));
+    } catch {}
+
     try {
       const inc = incidents.find((i) => i.id === incidentId);
       await apiClient.post('/volunteers/tasks', {
@@ -58,10 +90,9 @@ export function IncidentList() {
         incident_id: incidentId,
         priority: inc?.severity || 'HIGH',
       });
-      setAssignedIncidentIds((prev) => new Set(prev).add(incidentId));
       window.dispatchEvent(new CustomEvent('vajranet_data_updated'));
     } catch {
-      setAssignedIncidentIds((prev) => new Set(prev).add(incidentId));
+      window.dispatchEvent(new CustomEvent('vajranet_data_updated'));
     }
   }
 
