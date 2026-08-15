@@ -35,8 +35,8 @@ export function GovtOverview({ onNavigateTab }: GovtOverviewProps) {
     try {
       const [overviewRes, sosRes, incRes, shelterRes, hospRes, volRes] = await Promise.allSettled([
         governmentApi.getOverview(),
-        apiClient.get('/sos?limit=2000'),
-        apiClient.get('/incidents?limit=2000'),
+        apiClient.get('/sos'),
+        apiClient.get('/incidents'),
         apiClient.get('/shelters'),
         apiClient.get('/hospitals'),
         apiClient.get('/volunteers/tasks')

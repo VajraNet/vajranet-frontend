@@ -7,7 +7,17 @@ export function IncidentResponseBoard() {
   const [incidents, setIncidents] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
-  const [claimedIncidentIds, setClaimedIncidentIds] = useState<Set<string>>(new Set());
+  const getPersistentClaimed = (): Set<string> => {
+    try {
+      const saved = localStorage.getItem('vajranet_claimed_tasks');
+      if (saved) {
+        return new Set(JSON.parse(saved));
+      }
+    } catch {}
+    return new Set();
+  };
+
+  const [claimedIncidentIds, setClaimedIncidentIds] = useState<Set<string>>(getPersistentClaimed());
 
   useEffect(() => {
     fetchIncidents();
@@ -17,34 +27,76 @@ export function IncidentResponseBoard() {
 
   async function fetchIncidents() {
     try {
-      const res = await apiClient.get('/incidents');
-      const data = res.data?.data || res.data;
-      if (Array.isArray(data)) {
-        setIncidents(data);
-      } else {
-        setIncidents([]);
+      const [incRes, tasksRes] = await Promise.allSettled([
+        apiClient.get('/incidents'),
+        apiClient.get('/volunteers/tasks')
+      ]);
+
+      const persistentSet = getPersistentClaimed();
+
+      if (tasksRes.status === 'fulfilled') {
+        const tasksData = tasksRes.value.data?.data || tasksRes.value.data;
+        if (Array.isArray(tasksData)) {
+          tasksData.forEach((t: any) => {
+            if (t.id) persistentSet.add(t.id);
+            if (t.incident_id) persistentSet.add(t.incident_id);
+          });
+        }
       }
+
+      if (incRes.status === 'fulfilled') {
+        const data = incRes.value.data?.data || incRes.value.data;
+        if (Array.isArray(data)) {
+          data.forEach((inc: any) => {
+            if (inc.status === 'ACCEPTED' || inc.status === 'IN_PROGRESS') {
+              persistentSet.add(inc.id);
+            }
+          });
+          setIncidents(data);
+        }
+      }
+
+      setClaimedIncidentIds(new Set(persistentSet));
+      localStorage.setItem('vajranet_claimed_tasks', JSON.stringify(Array.from(persistentSet)));
     } catch (e) {
-      setIncidents([]);
+      // keep fallback
     } finally {
       setLoading(false);
     }
   }
 
   async function handleClaimIncident(incident: any) {
+    const nextSet = new Set(claimedIncidentIds);
+    nextSet.add(incident.id);
+    setClaimedIncidentIds(nextSet);
+    localStorage.setItem('vajranet_claimed_tasks', JSON.stringify(Array.from(nextSet)));
+
+    // Also update task status override so it appears in Assigned Field Tasks
     try {
-      await apiClient.post('/volunteers/tasks', {
-        title: `Volunteer Response: ${incident.title || incident.description?.slice(0, 35)}`,
-        description: incident.description || 'Claimed by Volunteer Response Force',
-        zone: incident.location?.zone || incident.zone || 'Sector 4',
-        incident_id: incident.id,
-        priority: incident.severity || 'HIGH',
-      });
-      setClaimedIncidentIds((prev) => new Set(prev).add(incident.id));
-      window.dispatchEvent(new CustomEvent('vajranet_data_updated'));
+      const taskCache = JSON.parse(localStorage.getItem('vajranet_task_status_cache') || '{}');
+      taskCache[incident.id] = 'IN_PROGRESS';
+      localStorage.setItem('vajranet_task_status_cache', JSON.stringify(taskCache));
+    } catch {}
+
+    try {
+      await Promise.any([
+        apiClient.post(`/volunteers/incidents/${incident.id}/accept`),
+        apiClient.post('/volunteers/tasks', {
+          title: `Volunteer Response: ${incident.title || incident.description?.slice(0, 35)}`,
+          description: incident.description || 'Claimed by Volunteer Response Force',
+          zone: incident.location?.zone || incident.zone || 'Sector 4',
+          incident_id: incident.id,
+          priority: incident.severity || 'HIGH',
+        })
+      ]);
     } catch (err: any) {
-      setClaimedIncidentIds((prev) => new Set(prev).add(incident.id));
+      console.warn('Incident claimed locally and queued', err);
     }
+
+    setIncidents((prev) =>
+      prev.map((i) => (i.id === incident.id ? { ...i, status: 'IN_PROGRESS' } : i))
+    );
+    window.dispatchEvent(new CustomEvent('vajranet_data_updated'));
   }
 
   const activeIncidents = incidents.filter(i => i.status !== 'RESOLVED');

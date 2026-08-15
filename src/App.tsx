@@ -118,8 +118,8 @@ export default function App() {
   const pollLiveCounts = useCallback(async () => {
     try {
       const [sosRes, incRes, taskRes, shelterRes] = await Promise.allSettled([
-        apiClient.get('/sos?limit=2000'),
-        apiClient.get('/incidents?limit=2000'),
+        apiClient.get('/sos'),
+        apiClient.get('/incidents'),
         apiClient.get('/volunteers/tasks'),
         apiClient.get('/shelters')
       ]);

@@ -44,8 +44,8 @@ export function TacticalGISMap({
     setIsLoading(true);
     try {
       const [sosRes, incRes, shRes, hospRes, rcRes] = await Promise.allSettled([
-        apiClient.get('/sos?limit=2000'),
-        apiClient.get('/incidents?limit=2000'),
+        apiClient.get('/sos'),
+        apiClient.get('/incidents'),
         apiClient.get('/shelters'),
         apiClient.get('/hospitals'),
         apiClient.get('/relief-centers'),
