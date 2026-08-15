@@ -12,7 +12,7 @@ export function LiveSOSFeed() {
   const [timeSinceUpdate, setTimeSinceUpdate] = useState<number>(0);
 
   // Filters & Search
-  const [statusFilter, setStatusFilter] = useState<string>('ALL');
+  const [statusFilter, setStatusFilter] = useState<string>('ACTIVE');
   const [severityFilter, setSeverityFilter] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
@@ -52,6 +52,15 @@ export function LiveSOSFeed() {
     return () => clearInterval(timer);
   }, [lastUpdated]);
 
+  const getResolvedIds = (): Set<string> => {
+    try {
+      const saved = localStorage.getItem('vajranet_resolved_sos_ids');
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    } catch {
+      return new Set();
+    }
+  };
+
   async function fetchSOS() {
     try {
       const res = await apiClient.get('/sos');
@@ -61,10 +70,20 @@ export function LiveSOSFeed() {
         try {
           sosCache = JSON.parse(localStorage.getItem('vajranet_sos_status_cache') || '{}');
         } catch {}
-        const merged = data.map((item: any) => ({
-          ...item,
-          status: sosCache[item.id] || item.status || 'ACTIVE'
-        }));
+
+        const resolvedSet = getResolvedIds();
+
+        const merged = data
+          .map((item: any) => ({
+            ...item,
+            status: sosCache[item.id] || item.status || 'ACTIVE'
+          }))
+          .filter((item: any) => {
+            // If item was marked resolved locally or on server, exclude from active feed unless checking resolved
+            if (resolvedSet.has(item.id)) return false;
+            return true;
+          });
+
         setSosList(merged);
         setError(null);
         setLastUpdated(new Date());
@@ -84,18 +103,39 @@ export function LiveSOSFeed() {
       const sosCache = JSON.parse(localStorage.getItem('vajranet_sos_status_cache') || '{}');
       sosCache[id] = newStatus;
       localStorage.setItem('vajranet_sos_status_cache', JSON.stringify(sosCache));
+
+      if (newStatus === 'RESOLVED') {
+        const resolvedSet = getResolvedIds();
+        resolvedSet.add(id);
+        localStorage.setItem('vajranet_resolved_sos_ids', JSON.stringify(Array.from(resolvedSet)));
+      }
     } catch {}
 
-    setSosList((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, status: newStatus } : item))
-    );
+    if (newStatus === 'RESOLVED') {
+      // Immediately remove from active display list
+      setSosList((prev) => prev.filter((item) => item.id !== id));
+    } else {
+      setSosList((prev) =>
+        prev.map((item) => (item.id === id ? { ...item, status: newStatus } : item))
+      );
+    }
+
     window.dispatchEvent(new CustomEvent('vajranet_data_updated'));
 
     try {
-      await Promise.any([
-        apiClient.patch(`/government/sos/${id}`, { status: newStatus }),
-        apiClient.patch(`/sos/${id}`, { status: newStatus })
-      ]);
+      if (newStatus === 'RESOLVED') {
+        await Promise.any([
+          apiClient.delete(`/sos/${id}`),
+          apiClient.delete(`/government/sos/${id}`),
+          apiClient.patch(`/government/sos/${id}`, { status: 'RESOLVED' }),
+          apiClient.patch(`/sos/${id}`, { status: 'RESOLVED' })
+        ]);
+      } else {
+        await Promise.any([
+          apiClient.patch(`/government/sos/${id}`, { status: newStatus }),
+          apiClient.patch(`/sos/${id}`, { status: newStatus })
+        ]);
+      }
     } catch (err) {
       console.warn('SOS status triage synced locally', err);
     }
