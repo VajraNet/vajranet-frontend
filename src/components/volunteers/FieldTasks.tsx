@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { CheckSquare, Clock, AlertTriangle, CheckCircle2, User, RefreshCw, Plus, X } from 'lucide-react';
+import { CheckSquare, CheckCircle2, RefreshCw } from 'lucide-react';
 import { apiClient } from '../../api/client';
 
 export interface VolunteerTask {
   id: string;
   title: string;
   description: string;
-  zone: string;
+  zone?: string;
   priority: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
   status: 'PENDING' | 'ACCEPTED' | 'IN_PROGRESS' | 'COMPLETED' | 'RESOLVED';
   assigned_at?: string;
@@ -16,13 +16,6 @@ export interface VolunteerTask {
 export function FieldTasks() {
   const [tasks, setTasks] = useState<VolunteerTask[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
-  const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
-
-  // New task form state
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [zone, setZone] = useState('Zone 4 - Riverbank');
-  const [priority, setPriority] = useState<'CRITICAL' | 'HIGH' | 'MEDIUM'>('HIGH');
 
   useEffect(() => {
     fetchTasks();
@@ -92,31 +85,6 @@ export function FieldTasks() {
     }
   }
 
-  async function handleCreateTask(e: React.FormEvent) {
-    e.preventDefault();
-    if (!title.trim()) return;
-
-    const newTask: VolunteerTask = {
-      id: `task-${Date.now()}`,
-      title: title.trim(),
-      description: description.trim() || 'Volunteer field assignment',
-      zone,
-      priority,
-      status: 'PENDING',
-      assignedAt: new Date().toISOString()
-    };
-
-    try {
-      await apiClient.post('/volunteers/tasks', newTask);
-    } catch (e) {}
-
-    setTasks(prev => [newTask, ...prev]);
-    setIsModalOpen(false);
-    setTitle('');
-    setDescription('');
-    window.dispatchEvent(new CustomEvent('vajranet_data_updated'));
-  }
-
   const getPriorityBadge = (p: string) => {
     switch (p) {
       case 'CRITICAL':
@@ -156,13 +124,6 @@ export function FieldTasks() {
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl flex items-center gap-1.5 transition cursor-pointer shadow-sm"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Create Task</span>
-          </button>
         </div>
       </div>
 
@@ -175,6 +136,7 @@ export function FieldTasks() {
         <div className="space-y-3">
           {tasks.map((task) => {
             const isCompleted = task.status === 'COMPLETED' || task.status === 'RESOLVED';
+            const hasValidZone = task.zone && task.zone.trim() !== '' && task.zone !== '—' && task.zone !== '-' && task.zone !== 'null';
 
             return (
               <div
@@ -186,9 +148,11 @@ export function FieldTasks() {
                     <span className={`text-[10px] font-bold font-mono px-2 py-0.5 rounded border ${getPriorityBadge(task.priority)}`}>
                       {task.priority}
                     </span>
-                    <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
-                      {task.zone}
-                    </span>
+                    {hasValidZone && (
+                      <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
+                        {task.zone}
+                      </span>
+                    )}
                     <span className={`text-[10px] font-bold font-mono px-2 py-0.5 rounded border ${
                       isCompleted ? 'bg-emerald-950 text-emerald-400 border-emerald-800' : 'bg-blue-950 text-blue-400 border-blue-800'
                     }`}>
@@ -227,85 +191,6 @@ export function FieldTasks() {
               </div>
             );
           })}
-        </div>
-      )}
-
-      {/* Create Task Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#0F1E36] border border-slate-700 rounded-2xl p-6 max-w-md w-full text-white space-y-4 shadow-2xl">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-              <h3 className="text-base font-bold">Create Volunteer Response Task</h3>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-white">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateTask} className="space-y-3 font-mono text-xs">
-              <div>
-                <label className="block text-slate-300 mb-1">Task Title</label>
-                <input
-                  type="text"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="e.g. Distribute Clean Drinking Water"
-                  required
-                  className="w-full bg-[#07111E] border border-slate-700 rounded-lg p-2.5 text-white focus:border-emerald-500 focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-300 mb-1">Task Description</label>
-                <textarea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Describe location, required materials, team size..."
-                  rows={3}
-                  className="w-full bg-[#07111E] border border-slate-700 rounded-lg p-2.5 text-white focus:border-emerald-500 focus:outline-none"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-slate-300 mb-1">Priority</label>
-                  <select
-                    value={priority}
-                    onChange={(e) => setPriority(e.target.value as any)}
-                    className="w-full bg-[#07111E] border border-slate-700 rounded-lg p-2.5 text-white focus:border-emerald-500 focus:outline-none"
-                  >
-                    <option value="CRITICAL">Critical</option>
-                    <option value="HIGH">High</option>
-                    <option value="MEDIUM">Medium</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-slate-300 mb-1">Assigned Sector</label>
-                  <input
-                    type="text"
-                    value={zone}
-                    onChange={(e) => setZone(e.target.value)}
-                    className="w-full bg-[#07111E] border border-slate-700 rounded-lg p-2.5 text-white focus:border-emerald-500 focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg cursor-pointer"
-                >
-                  Create Task
-                </button>
-              </div>
-            </form>
-          </div>
         </div>
       )}
     </div>
