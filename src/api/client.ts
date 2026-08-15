@@ -34,8 +34,7 @@ apiClient.interceptors.response.use(
   },
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('vajranet_token');
-      window.location.reload();
+      console.warn('API 401 Unauthorized Response', error.response?.data);
     }
     return Promise.reject(error);
   }

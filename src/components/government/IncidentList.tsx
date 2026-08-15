@@ -3,7 +3,7 @@ import { Incident, EmergencyStatus } from '../../types/api';
 import { governmentApi } from '../../api/government';
 import { apiClient } from '../../api/client';
 import { IncidentCreateModal } from '../common/IncidentCreateModal';
-import { Plus, Flame, RefreshCw, Send, CheckCircle2, UserCheck, Image as ImageIcon } from 'lucide-react';
+import { Plus, Flame, RefreshCw, CheckCircle2, UserCheck, MapPin } from 'lucide-react';
 
 export function IncidentList() {
   const [incidents, setIncidents] = useState<Incident[]>([]);
@@ -15,49 +15,20 @@ export function IncidentList() {
 
   useEffect(() => {
     fetchIncidents();
-    const interval = setInterval(fetchIncidents, 6000);
+    const interval = setInterval(fetchIncidents, 5000);
     return () => clearInterval(interval);
   }, []);
 
   async function fetchIncidents() {
     try {
       const data = await governmentApi.getIncidents();
-      if (Array.isArray(data) && data.length > 0) {
+      if (Array.isArray(data)) {
         setIncidents(data);
       } else {
-        throw new Error('Empty incidents list');
+        setIncidents([]);
       }
     } catch (err) {
-      // Demo state fallback
-      setIncidents((prev) => prev.length > 0 ? prev : [
-        {
-          id: 'inc-301',
-          disaster_type: 'FLOOD',
-          severity: 'CRITICAL',
-          description: 'Embankment breach near Sector 4 bridge. Rapid water overflow into residential streets.',
-          location: { zone: 'Sector 4', address: 'Bridge Road Crossing' },
-          status: 'ACTIVE',
-          reported_at: new Date().toISOString(),
-        },
-        {
-          id: 'inc-302',
-          disaster_type: 'BUILDING_COLLAPSE',
-          severity: 'HIGH',
-          description: 'Partial commercial building wall collapse due to waterlogging.',
-          location: { zone: 'Zone 1 - West', address: 'Commercial Market Ave' },
-          status: 'IN_PROGRESS',
-          reported_at: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
-        },
-        {
-          id: 'inc-303',
-          disaster_type: 'ACCIDENT',
-          severity: 'MEDIUM',
-          description: 'Tree blocking main evacuation arterial road.',
-          location: { zone: 'Zone 3 - North', address: 'Highway Exit 12' },
-          status: 'RESOLVED',
-          reported_at: new Date(Date.now() - 1000 * 60 * 120).toISOString(),
-        },
-      ]);
+      setIncidents([]);
     } finally {
       setLoading(false);
     }
@@ -67,103 +38,128 @@ export function IncidentList() {
     try {
       await governmentApi.updateIncidentStatus(id, newStatus);
       setIncidents((prev) =>
-        (Array.isArray(prev) ? prev : []).map((item) => (item.id === id ? { ...item, status: newStatus } : item))
+        prev.map((item) => (item.id === id ? { ...item, status: newStatus } : item))
       );
+      window.dispatchEvent(new CustomEvent('vajranet_data_updated'));
     } catch (err) {
       setIncidents((prev) =>
-        (Array.isArray(prev) ? prev : []).map((item) => (item.id === id ? { ...item, status: newStatus } : item))
+        prev.map((item) => (item.id === id ? { ...item, status: newStatus } : item))
       );
     }
   }
 
-  async function handleAssignToVolunteers(incident: any) {
+  async function handleAssignVolunteers(incidentId: string) {
     try {
+      const inc = incidents.find((i) => i.id === incidentId);
       await apiClient.post('/volunteers/tasks', {
-        title: `Response: ${incident.title || incident.description?.slice(0, 40) || 'Hazard'}`,
-        description: incident.description || 'Dispatched by Government Command EOC',
-        zone: incident.location?.zone || incident.zone || 'Sector 4',
-        priority: incident.severity || 'HIGH',
-        incident_id: incident.id
+        title: `Priority Dispatch: ${inc?.title || inc?.description?.slice(0, 30)}`,
+        description: inc?.description || 'Government EOC Priority Task',
+        zone: inc?.location?.zone || inc?.zone || 'Zone 1',
+        incident_id: incidentId,
+        priority: inc?.severity || 'HIGH',
       });
-      setAssignedIncidentIds(prev => new Set(prev).add(incident.id));
-    } catch (e) {
-      setAssignedIncidentIds(prev => new Set(prev).add(incident.id));
+      setAssignedIncidentIds((prev) => new Set(prev).add(incidentId));
+      window.dispatchEvent(new CustomEvent('vajranet_data_updated'));
+    } catch {
+      setAssignedIncidentIds((prev) => new Set(prev).add(incidentId));
     }
   }
 
-  const safeIncidents = Array.isArray(incidents) ? incidents : [];
-
-  const filteredIncidents = safeIncidents.filter((inc) => {
-    const disasterType = inc.disaster_type || (inc as any).type || 'OTHER';
-    const severity = inc.severity || 'MEDIUM';
-    const matchesType = typeFilter === 'ALL' || disasterType === typeFilter;
-    const matchesSeverity = severityFilter === 'ALL' || severity === severityFilter;
-    return matchesType && matchesSeverity;
+  const filteredIncidents = incidents.filter((inc) => {
+    const disasterType = inc.disaster_type || inc.type || 'OTHER';
+    if (typeFilter !== 'ALL' && disasterType !== typeFilter) return false;
+    if (severityFilter !== 'ALL' && inc.severity !== severityFilter) return false;
+    return true;
   });
 
-  if (loading) {
-    return <div className="p-6 text-slate-400">Loading master incident log...</div>;
-  }
+  const getSeverityBadge = (sev: string) => {
+    switch (sev) {
+      case 'CRITICAL':
+        return 'bg-red-950 text-red-400 border-red-800';
+      case 'HIGH':
+        return 'bg-amber-950 text-amber-400 border-amber-800';
+      case 'MEDIUM':
+        return 'bg-cyan-950 text-cyan-400 border-cyan-800';
+      default:
+        return 'bg-emerald-950 text-emerald-400 border-emerald-800';
+    }
+  };
+
+  const getStatusBadge = (status?: string) => {
+    switch (status) {
+      case 'REPORTED':
+      case 'PENDING':
+        return 'bg-amber-950 text-amber-400 border-amber-800';
+      case 'IN_PROGRESS':
+        return 'bg-blue-950 text-blue-400 border-blue-800';
+      case 'RESOLVED':
+        return 'bg-emerald-950 text-emerald-400 border-emerald-800';
+      default:
+        return 'bg-slate-800 text-slate-300 border-slate-700';
+    }
+  };
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-5">
+    <div className="bg-[#0F1E36] border border-slate-800 rounded-2xl p-5 lg:p-6 space-y-6 shadow-xl">
       
-      {/* Top Header with Report Incident Button */}
+      {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-800">
         <div>
-          <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2">
-            <span>📋 Master Incident Triage</span>
-            <span className="text-xs bg-amber-950 text-amber-300 border border-amber-800 px-2 py-0.5 rounded-full font-mono font-bold">
-              {filteredIncidents.length} Live Incidents
+          <h2 className="text-base font-bold text-white flex items-center gap-2">
+            <Flame className="w-5 h-5 text-amber-400" />
+            <span>Disaster Hazards & Verified Incidents</span>
+            <span className="text-[10px] bg-amber-950 text-amber-400 border border-amber-800 px-2 py-0.2 rounded-full font-mono font-bold">
+              {filteredIncidents.length} INCIDENTS
             </span>
           </h2>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Geographic emergency incident reporting, filtering, and operational dispatch tracking.
+          <p className="text-xs text-slate-400 mt-0.5 font-mono">
+            Ground hazard monitoring, severity escalation, and direct responder task assignment.
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="px-3.5 py-2 bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white text-xs font-bold rounded-xl shadow-lg transition flex items-center gap-1.5 cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Report Incident (with Image)</span>
-          </button>
-
+        <div className="flex items-center gap-2">
           <button
             onClick={fetchIncidents}
-            className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition cursor-pointer"
-            title="Refresh Incidents"
+            className="p-2 bg-[#07111E] hover:bg-slate-800 text-slate-300 border border-slate-700 rounded-xl transition cursor-pointer"
+            title="Refresh Incident Feed"
           >
-            <RefreshCw className="w-3.5 h-3.5" />
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="bg-red-600 hover:bg-red-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl flex items-center gap-1.5 transition cursor-pointer shadow-sm"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Report Incident</span>
           </button>
         </div>
       </div>
 
-      {/* Filter Controls */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-950/60 p-3 rounded-xl border border-slate-800">
+      {/* Filters Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-[#07111E] p-3 rounded-xl border border-slate-800 text-xs font-mono">
         <div className="flex items-center gap-2">
-          <span className="text-xs text-slate-400 font-mono">Filters:</span>
+          <span className="text-slate-400">Type:</span>
           <select
             value={typeFilter}
             onChange={(e) => setTypeFilter(e.target.value)}
-            className="bg-slate-900 border border-slate-700 text-xs text-slate-200 px-3 py-1.5 rounded-lg focus:outline-none cursor-pointer"
+            className="bg-[#0F1E36] border border-slate-700 rounded-lg px-2.5 py-1 text-white focus:outline-none"
           >
-            <option value="ALL">All Disaster Types</option>
-            <option value="FLOOD">Flood / Waterlogging</option>
+            <option value="ALL">All Types</option>
+            <option value="FLOOD">Flood</option>
             <option value="FIRE">Fire</option>
-            <option value="EARTHQUAKE">Earthquake</option>
             <option value="LANDSLIDE">Landslide</option>
-            <option value="STRUCTURAL_COLLAPSE">Building Collapse</option>
-            <option value="ROADBLOCK">Roadblock</option>
-            <option value="MEDICAL_EMERGENCY">Medical</option>
+            <option value="BUILDING_COLLAPSE">Building Collapse</option>
+            <option value="MEDICAL">Medical Emergency</option>
+            <option value="OTHER">Other Hazards</option>
           </select>
+        </div>
 
+        <div className="flex items-center gap-2">
+          <span className="text-slate-400">Severity:</span>
           <select
             value={severityFilter}
             onChange={(e) => setSeverityFilter(e.target.value)}
-            className="bg-slate-900 border border-slate-700 text-xs text-slate-200 px-3 py-1.5 rounded-lg focus:outline-none cursor-pointer"
+            className="bg-[#0F1E36] border border-slate-700 rounded-lg px-2.5 py-1 text-white focus:outline-none"
           >
             <option value="ALL">All Severities</option>
             <option value="CRITICAL">Critical</option>
@@ -174,128 +170,118 @@ export function IncidentList() {
         </div>
       </div>
 
-      {/* Incident Cards List */}
-      <div className="space-y-4">
-        {filteredIncidents.length === 0 ? (
-          <p className="text-sm text-slate-400 italic text-center py-6">No incidents match the selected filter criteria.</p>
-        ) : (
-          filteredIncidents.map((incident: any) => {
-            const disasterType = incident.disaster_type || incident.type || 'OTHER';
-            const severity = incident.severity || 'MEDIUM';
-            const description = incident.description || incident.title || 'Disaster hazard reported';
-            const title = incident.title || `${disasterType} Report`;
-            const zone = incident.location?.zone || incident.zone || 'Sector 1';
-            const address = incident.location?.address || incident.address || '';
-            const reportedTime = incident.reported_at || incident.created_at ? new Date(incident.reported_at || incident.created_at).toLocaleTimeString() : 'Recently';
-            const mediaList = incident.media_urls || (incident.image_url ? [incident.image_url] : []);
-            const isAssigned = assignedIncidentIds.has(incident.id);
+      {/* Incident Cards */}
+      {filteredIncidents.length === 0 && !loading ? (
+        <div className="p-8 text-center bg-[#07111E] border border-slate-800 rounded-xl text-slate-400 text-xs font-mono">
+          No matching disaster incidents found in database.
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {filteredIncidents.map((inc) => {
+            const disasterType = inc.disaster_type || inc.type || 'HAZARD';
+            const isAssigned = assignedIncidentIds.has(inc.id);
 
             return (
               <div
-                key={incident.id}
-                className="bg-slate-950/80 border border-slate-800 hover:border-slate-700 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 transition shadow-md"
+                key={inc.id}
+                className="bg-[#07111E] border border-slate-800 hover:border-slate-700 rounded-xl p-4 transition space-y-3"
               >
-                <div className="space-y-2 max-w-2xl">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-800">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs font-bold px-2 py-0.5 rounded bg-slate-800 text-slate-200 border border-slate-700 font-mono">
+                    <span className="text-xs font-bold text-white font-mono">{inc.id}</span>
+                    <span className={`text-[10px] font-bold font-mono px-2 py-0.5 rounded border ${getSeverityBadge(inc.severity)}`}>
+                      {inc.severity}
+                    </span>
+                    <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
                       {disasterType}
                     </span>
-                    <span
-                      className={`text-xs font-bold px-2 py-0.5 rounded border uppercase font-mono ${
-                        severity === 'CRITICAL'
-                          ? 'bg-rose-950 text-rose-400 border-rose-800'
-                          : severity === 'HIGH'
-                          ? 'bg-amber-950 text-amber-400 border-amber-800'
-                          : 'bg-slate-900 text-slate-300 border-slate-700'
-                      }`}
-                    >
-                      {severity}
-                    </span>
-                    <span className="text-[11px] text-slate-500 font-mono">
-                      Reported: {reportedTime}
+                    <span className={`text-[10px] font-bold font-mono px-2 py-0.5 rounded border ${getStatusBadge(inc.status)}`}>
+                      {inc.status}
                     </span>
                   </div>
 
-                  <div>
-                    <h4 className="text-sm font-bold text-white">{title}</h4>
-                    <p className="text-xs text-slate-300 mt-0.5 leading-relaxed">{description}</p>
-                  </div>
+                  <span className="text-[10px] text-slate-500 font-mono">
+                    {inc.created_at || inc.reported_at ? new Date(inc.created_at || inc.reported_at!).toLocaleString() : 'Live'}
+                  </span>
+                </div>
 
-                  {/* Image Thumbnails */}
-                  {mediaList.length > 0 && (
-                    <div className="flex items-center gap-2 pt-1">
-                      {mediaList.map((url: string, idx: number) => (
-                        <a key={idx} href={url} target="_blank" rel="noreferrer" className="relative group block">
-                          <img
-                            src={url}
-                            alt="Incident Evidence"
-                            className="w-16 h-16 rounded-lg object-cover border border-slate-700 group-hover:border-cyan-400 transition"
-                          />
-                          <span className="absolute bottom-0.5 right-0.5 bg-black/70 text-[9px] text-cyan-300 px-1 rounded font-mono">
-                            VIEW
-                          </span>
-                        </a>
-                      ))}
-                    </div>
+                <div>
+                  <h4 className="text-sm font-bold text-white">{inc.title || inc.description}</h4>
+                  {inc.title && inc.description && (
+                    <p className="text-xs text-slate-300 mt-1">{inc.description}</p>
                   )}
-
-                  <p className="text-xs text-slate-400 font-mono">
-                    📍 Zone: <span className="text-slate-300 font-semibold">{zone}</span>
-                    {address && ` (${address})`}
-                    {incident.latitude && ` • GPS: ${incident.latitude.toFixed?.(4) || incident.latitude}, ${incident.longitude?.toFixed?.(4) || incident.longitude}`}
+                  <p className="text-xs text-slate-400 font-mono mt-1 flex items-center gap-1">
+                    <MapPin className="w-3 h-3 text-slate-500" />
+                    <span>{inc.address || inc.location?.address || `Lat: ${inc.latitude}, Lon: ${inc.longitude}`}</span>
                   </p>
                 </div>
 
-                {/* Status & Actions */}
-                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 shrink-0">
-                  
-                  {/* Assign to Volunteer Squad Action */}
+                {/* Media Attachment */}
+                {Array.isArray(inc.media_urls) && inc.media_urls.length > 0 && (
+                  <div className="flex gap-2 overflow-x-auto pt-1">
+                    {inc.media_urls.map((url, idx) => (
+                      <a key={idx} href={url} target="_blank" rel="noopener noreferrer" className="shrink-0">
+                        <img src={url} alt="Evidence" className="h-16 w-24 object-cover rounded-lg border border-slate-700" />
+                      </a>
+                    ))}
+                  </div>
+                )}
+
+                {/* Action Controls */}
+                <div className="flex items-center justify-between pt-2 border-t border-slate-800 text-xs font-mono">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-slate-400 text-[11px]">Update Status:</span>
+                    <button
+                      onClick={() => handleStatusUpdate(inc.id, 'IN_PROGRESS')}
+                      className="px-2.5 py-1 bg-blue-950 hover:bg-blue-900 text-blue-300 border border-blue-800 rounded-lg font-bold cursor-pointer"
+                    >
+                      In Progress
+                    </button>
+                    <button
+                      onClick={() => handleStatusUpdate(inc.id, 'RESOLVED')}
+                      className="px-2.5 py-1 bg-emerald-950 hover:bg-emerald-900 text-emerald-300 border border-emerald-800 rounded-lg font-bold cursor-pointer"
+                    >
+                      Resolve
+                    </button>
+                  </div>
+
                   <button
-                    onClick={() => handleAssignToVolunteers(incident)}
+                    onClick={() => handleAssignVolunteers(inc.id)}
                     disabled={isAssigned}
-                    className={`text-xs px-3 py-1.5 rounded-lg font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                    className={`px-3 py-1 rounded-lg font-bold flex items-center gap-1 transition cursor-pointer ${
                       isAssigned
-                        ? 'bg-emerald-950 text-emerald-300 border border-emerald-700/60 cursor-default'
-                        : 'bg-indigo-900/60 hover:bg-indigo-800 text-indigo-200 border border-indigo-500/40'
+                        ? 'bg-slate-800 text-slate-400 border border-slate-700'
+                        : 'bg-amber-600 hover:bg-amber-700 text-white shadow-sm'
                     }`}
                   >
-                    <UserCheck className="w-3.5 h-3.5" />
-                    <span>{isAssigned ? '✓ Assigned to Volunteers' : 'Assign to Volunteer Force'}</span>
+                    {isAssigned ? (
+                      <>
+                        <UserCheck className="w-3.5 h-3.5" />
+                        <span>Dispatched</span>
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Dispatch Responders</span>
+                      </>
+                    )}
                   </button>
-
-                  <div className="flex items-center gap-1.5">
-                    {incident.status !== 'IN_PROGRESS' && incident.status !== 'RESOLVED' && (
-                      <button
-                        onClick={() => handleStatusUpdate(incident.id, 'IN_PROGRESS')}
-                        className="text-xs bg-[#0077B6] hover:bg-[#005f92] text-white px-3 py-1.5 rounded-lg font-medium transition cursor-pointer"
-                      >
-                        Dispatch Unit
-                      </button>
-                    )}
-                    {incident.status !== 'RESOLVED' && (
-                      <button
-                        onClick={() => handleStatusUpdate(incident.id, 'RESOLVED')}
-                        className="text-xs bg-[#059669] hover:bg-[#047857] text-white px-3 py-1.5 rounded-lg font-medium transition cursor-pointer"
-                      >
-                        Resolve
-                      </button>
-                    )}
-                  </div>
                 </div>
               </div>
             );
-          })
-        )}
-      </div>
+          })}
+        </div>
+      )}
 
-      {/* Reusable Modal for Reporting Incident with Images */}
+      {/* Report Incident Modal */}
       <IncidentCreateModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onSuccess={(created) => {
-          setIncidents(prev => [created, ...prev]);
+          setIncidents((prev) => [created, ...prev]);
+          window.dispatchEvent(new CustomEvent('vajranet_data_updated'));
         }}
-        reporterRole="GOVT_OPERATOR"
+        reporterRole="GOVT_EOC"
       />
 
     </div>

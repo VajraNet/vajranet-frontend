@@ -1,25 +1,11 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import L from 'leaflet';
 import { 
-  AlertTriangle, 
-  Home, 
-  HeartPulse, 
-  Package, 
-  Layers, 
   Compass, 
   Crosshair, 
-  Eye, 
-  Flame, 
-  Waves, 
-  Building2, 
-  ShieldAlert, 
-  Phone, 
-  ExternalLink,
-  RefreshCw,
-  Search,
-  Filter
+  RefreshCw
 } from 'lucide-react';
-import { governmentApi } from '../../api/government';
+import { apiClient } from '../../api/client';
 import { SOSPayload, Incident, ResourceShelter, ResourceHospital, ResourceReliefCenter } from '../../types/api';
 
 interface TacticalGISMapProps {
@@ -38,11 +24,11 @@ export function TacticalGISMap({
   const mapInstanceRef = useRef<L.Map | null>(null);
   const markersLayerRef = useRef<L.LayerGroup | null>(null);
 
-  // Filter state
+  // Filter state: default STREET grid
   const [activeLayer, setActiveLayer] = useState<'ALL' | 'SOS' | 'INCIDENTS' | 'SHELTERS' | 'HOSPITALS' | 'RELIEF'>('ALL');
   const [selectedEntity, setSelectedEntity] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [mapTheme, setMapTheme] = useState<'DARK' | 'STREET'>('DARK');
+  const [mapTheme, setMapTheme] = useState<'STREET' | 'DARK'>('STREET');
 
   // Live Data state
   const [sosList, setSosList] = useState<SOSPayload[]>([]);
@@ -51,233 +37,148 @@ export function TacticalGISMap({
   const [hospitals, setHospitals] = useState<ResourceHospital[]>([]);
   const [reliefCenters, setReliefCenters] = useState<ResourceReliefCenter[]>([]);
 
-  // 1. Fetch Real Data with Fallbacks
-  const loadGISData = async () => {
+  // 1. Fetch Real Data Directly from Backend Database
+  const loadGISData = useCallback(async () => {
     setIsLoading(true);
     try {
       const [sosRes, incRes, shRes, hospRes, rcRes] = await Promise.allSettled([
-        governmentApi.getSOSList(),
-        governmentApi.getIncidents(),
-        governmentApi.getShelters(),
-        governmentApi.getHospitals(),
-        governmentApi.getReliefCenters(),
+        apiClient.get('/sos'),
+        apiClient.get('/incidents'),
+        apiClient.get('/shelters'),
+        apiClient.get('/hospitals'),
+        apiClient.get('/relief-centers'),
       ]);
 
       // SOS
-      if (sosRes.status === 'fulfilled' && sosRes.value.length > 0) {
-        setSosList(sosRes.value);
-      } else {
-        setSosList([
-          {
-            id: 'SOS-801',
-            message: '4 adults & 2 children stranded on terrace. Flood water level reaching 2nd floor.',
-            latitude: 28.6185,
-            longitude: 77.2140,
-            severity: 'CRITICAL',
-            status: 'PENDING',
-            user_name: 'Vikram Joshi',
-            user_phone: '+91 98111 22334',
-            created_at: new Date(Date.now() - 1000 * 60 * 12).toISOString(),
-          },
-          {
-            id: 'SOS-802',
-            message: 'Elderly cardiac patient requires oxygen cylinder and immediate medical evacuation.',
-            latitude: 28.6080,
-            longitude: 77.2025,
-            severity: 'CRITICAL',
-            status: 'ACKNOWLEDGED',
-            user_name: 'Ananya Roy',
-            user_phone: '+91 98765 11223',
-            created_at: new Date(Date.now() - 1000 * 60 * 25).toISOString(),
-          },
-          {
-            id: 'SOS-803',
-            message: 'Power grid collapsed. 15 families sheltering in community hall need drinking water.',
-            latitude: 28.6250,
-            longitude: 77.2210,
-            severity: 'HIGH',
-            status: 'PENDING',
-            user_name: 'Rajesh Kumar',
-            user_phone: '+91 99887 76655',
-            created_at: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
-          },
-        ]);
+      if (sosRes.status === 'fulfilled') {
+        const d = sosRes.value.data?.data || sosRes.value.data;
+        if (Array.isArray(d)) {
+          setSosList(d.filter((item: any) => item.status !== 'RESOLVED' && item.status !== 'CANCELLED'));
+        }
       }
 
       // Incidents
-      if (incRes.status === 'fulfilled' && incRes.value.length > 0) {
-        setIncidents(incRes.value);
-      } else {
-        setIncidents([
-          {
-            id: 'INC-401',
-            title: 'Yamuna River Embankment Breach',
-            description: 'Major breach reported near Sector 3 floodwall. Water inundating arterial bypass road.',
-            type: 'FLOOD',
-            severity: 'CRITICAL',
-            status: 'INVESTIGATING',
-            latitude: 28.6290,
-            longitude: 77.2180,
-            created_at: new Date(Date.now() - 1000 * 60 * 40).toISOString(),
-          },
-          {
-            id: 'INC-402',
-            title: 'Transformer Explosion & Structural Fire',
-            description: 'Substation transformer fire spreading to adjacent commercial warehouse.',
-            type: 'FIRE',
-            severity: 'HIGH',
-            status: 'DISPATCHED',
-            latitude: 28.6050,
-            longitude: 77.2120,
-            created_at: new Date(Date.now() - 1000 * 60 * 80).toISOString(),
-          },
-          {
-            id: 'INC-403',
-            title: 'Bridge Structural Crack & Blockade',
-            description: 'Old civil bridge over canal cracked. Traffic halted by local volunteers.',
-            type: 'ROAD_BLOCK',
-            severity: 'MEDIUM',
-            status: 'ACKNOWLEDGED',
-            latitude: 28.6120,
-            longitude: 77.1950,
-            created_at: new Date(Date.now() - 1000 * 60 * 110).toISOString(),
-          },
-        ]);
+      if (incRes.status === 'fulfilled') {
+        const d = incRes.value.data?.data || incRes.value.data;
+        if (Array.isArray(d)) {
+          setIncidents(d.filter((item: any) => item.status !== 'RESOLVED'));
+        }
       }
 
       // Shelters
-      if (shRes.status === 'fulfilled' && shRes.value.length > 0) {
-        setShelters(shRes.value);
-      } else {
-        setShelters([
-          {
-            id: 'SH-101',
-            name: 'Sector 4 Indoor Stadium Relief Camp',
-            address: 'Sports Complex, Sector 4, Civil Lines',
-            capacity: 800,
-            occupied: 460,
-            latitude: 28.6220,
-            longitude: 77.2050,
-            has_food: true,
-            has_water: true,
-            has_medical: true,
-            status: 'OPEN',
-            available: 340,
-          },
-          {
-            id: 'SH-102',
-            name: 'Govt Model High School Shelter',
-            address: 'Station Road, North Campus',
-            capacity: 400,
-            occupied: 380,
-            latitude: 28.6090,
-            longitude: 77.2280,
-            has_food: true,
-            has_water: true,
-            has_medical: false,
-            status: 'OPEN',
-            available: 20,
-          },
-        ]);
+      if (shRes.status === 'fulfilled') {
+        const d = shRes.value.data?.data || shRes.value.data;
+        if (Array.isArray(d)) {
+          setShelters(d);
+        }
       }
 
       // Hospitals
-      if (hospRes.status === 'fulfilled' && hospRes.value.length > 0) {
-        setHospitals(hospRes.value);
-      } else {
-        setHospitals([
-          {
-            id: 'HOSP-201',
-            name: 'Apex Super Specialty Trauma Center',
-            address: 'Ring Road, Sector 7',
-            total_beds: 350,
-            available_beds: 42,
-            icu_available: 8,
-            oxygen_available: true,
-            contact_number: '+91 11 2345 6789',
-            latitude: 28.6160,
-            longitude: 77.1980,
-            status: 'OPERATIONAL',
-          },
-          {
-            id: 'HOSP-202',
-            name: 'Red Cross Emergency Field Hospital',
-            address: 'Naval Dock Gate 3, Riverbank',
-            total_beds: 120,
-            available_beds: 28,
-            icu_available: 4,
-            oxygen_available: true,
-            contact_number: '+91 11 9876 5432',
-            latitude: 28.6270,
-            longitude: 77.2100,
-            status: 'OPERATIONAL',
-          },
-        ]);
+      if (hospRes.status === 'fulfilled') {
+        const d = hospRes.value.data?.data || hospRes.value.data;
+        if (Array.isArray(d)) {
+          setHospitals(d);
+        }
       }
 
       // Relief Centers
-      if (rcRes.status === 'fulfilled' && rcRes.value.length > 0) {
-        setReliefCenters(rcRes.value);
-      } else {
-        setReliefCenters([
-          {
-            id: 'RC-301',
-            name: 'NDRF Central Ration & Water Depot',
-            address: 'Warehouse Block 12, Logistics Zone',
-            items_available: 'Ration Kits (1200), Water Packets (5000), Blankets (800)',
-            contact_person: 'Sub-Inspector Rawat (+91 94123 45678)',
-            latitude: 28.6190,
-            longitude: 77.2250,
-            status: 'ACTIVE',
-          },
-        ]);
+      if (rcRes.status === 'fulfilled') {
+        const d = rcRes.value.data?.data || rcRes.value.data;
+        if (Array.isArray(d)) {
+          setReliefCenters(d);
+        }
       }
+    } catch (e) {
+      console.warn('GIS Data load error:', e);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadGISData();
-  }, []);
+    const interval = setInterval(loadGISData, 5000);
 
-  // 2. Initialize Leaflet Map
+    const handleUpdate = () => {
+      loadGISData();
+    };
+
+    window.addEventListener('vajranet_data_updated', handleUpdate);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('vajranet_data_updated', handleUpdate);
+    };
+  }, [loadGISData]);
+
+  // 2. Initialize Leaflet Map safely with Street Grid default
   useEffect(() => {
     if (!mapContainerRef.current) return;
 
-    if (!mapInstanceRef.current) {
-      const map = L.map(mapContainerRef.current, {
+    if (mapInstanceRef.current) {
+      try {
+        mapInstanceRef.current.remove();
+      } catch (e) {}
+      mapInstanceRef.current = null;
+    }
+
+    if ((mapContainerRef.current as any)._leaflet_id) {
+      delete (mapContainerRef.current as any)._leaflet_id;
+    }
+
+    let map: L.Map;
+    try {
+      map = L.map(mapContainerRef.current, {
         center: initialCenter,
         zoom: zoom,
         zoomControl: false,
       });
-
-      L.control.zoom({ position: 'bottomright' }).addTo(map);
-
-      // Dark Matter Map Tiles
-      const darkTiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
-        maxZoom: 19,
-      });
-
-      const streetTiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors',
-        maxZoom: 19,
-      });
-
-      if (mapTheme === 'DARK') {
-        darkTiles.addTo(map);
-      } else {
-        streetTiles.addTo(map);
+    } catch (e) {
+      if ((mapContainerRef.current as any)._leaflet_id) {
+        delete (mapContainerRef.current as any)._leaflet_id;
       }
-
-      const markersLayer = L.layerGroup().addTo(map);
-      markersLayerRef.current = markersLayer;
-      mapInstanceRef.current = map;
+      map = L.map(mapContainerRef.current, {
+        center: initialCenter,
+        zoom: zoom,
+        zoomControl: false,
+      });
     }
 
+    L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+    // Street grid default (Carto Voyager) vs Dark Grid (Carto Dark)
+    const tileUrl = mapTheme === 'DARK'
+      ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+      : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+
+    L.tileLayer(tileUrl, {
+      attribution: '&copy; CartoDB &copy; OpenStreetMap contributors',
+      maxZoom: 19,
+    }).addTo(map);
+
+    const markersLayer = L.layerGroup().addTo(map);
+    markersLayerRef.current = markersLayer;
+    mapInstanceRef.current = map;
+
+    const timer = setTimeout(() => {
+      if (mapInstanceRef.current) {
+        try {
+          mapInstanceRef.current.invalidateSize();
+        } catch (e) {}
+      }
+    }, 150);
+
     return () => {
-      // Keep map reference stable across renders
+      clearTimeout(timer);
+      if (mapInstanceRef.current) {
+        try {
+          mapInstanceRef.current.remove();
+        } catch (e) {}
+        mapInstanceRef.current = null;
+      }
+      if (mapContainerRef.current && (mapContainerRef.current as any)._leaflet_id) {
+        delete (mapContainerRef.current as any)._leaflet_id;
+      }
     };
   }, []);
 
@@ -293,33 +194,32 @@ export function TacticalGISMap({
 
     const tileUrl = mapTheme === 'DARK'
       ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-      : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+      : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
 
     L.tileLayer(tileUrl, {
-      attribution: '&copy; OpenStreetMap &copy; CARTO',
+      attribution: '&copy; CartoDB &copy; OpenStreetMap contributors',
       maxZoom: 19,
     }).addTo(map);
   }, [mapTheme]);
 
-  // 3. Render Custom Markers on Map
+  // 3. Render Clean Custom Markers on Map
   useEffect(() => {
     if (!mapInstanceRef.current || !markersLayerRef.current) return;
     const markersLayer = markersLayerRef.current;
     markersLayer.clearLayers();
 
-    // Custom Icon Generator
+    // Clean Marker Generator without glowing rings
     const createCustomIcon = (type: 'SOS' | 'INCIDENT' | 'SHELTER' | 'HOSPITAL' | 'RELIEF', item: any) => {
       let html = '';
       if (type === 'SOS') {
         const isCritical = item.severity === 'CRITICAL';
         html = `
-          <div class="relative flex items-center justify-center cursor-pointer group">
-            <div class="absolute w-10 h-10 rounded-full ${isCritical ? 'bg-red-500/40' : 'bg-amber-500/40'} animate-radar-ping"></div>
-            <div class="w-8 h-8 rounded-full ${isCritical ? 'bg-red-600 ring-2 ring-red-300' : 'bg-amber-600 ring-2 ring-amber-300'} text-white flex items-center justify-center text-xs font-black shadow-lg shadow-red-900/50">
+          <div class="relative flex items-center justify-center cursor-pointer">
+            <div class="w-7 h-7 rounded-full ${isCritical ? 'bg-red-600' : 'bg-amber-600'} text-white flex items-center justify-center text-xs font-bold shadow-md border-2 border-white">
               🚨
             </div>
-            <span class="absolute -bottom-4 bg-slate-900/90 text-red-300 text-[9px] font-mono px-1.5 py-0.2 rounded border border-red-800/80 whitespace-nowrap font-bold">
-              ${item.id}
+            <span class="absolute -bottom-4 bg-slate-900 text-red-300 text-[9px] font-mono px-1 rounded border border-slate-700 whitespace-nowrap font-bold">
+              ${(item.id || item.message_id || 'SOS').slice(0, 7)}
             </span>
           </div>
         `;
@@ -327,43 +227,43 @@ export function TacticalGISMap({
         const iconSymbol = item.type === 'FLOOD' ? '🌊' : item.type === 'FIRE' ? '🔥' : '⚠️';
         html = `
           <div class="relative flex items-center justify-center cursor-pointer">
-            <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-amber-600 to-orange-500 ring-2 ring-orange-400 text-white flex items-center justify-center text-xs font-black shadow-lg">
+            <div class="w-7 h-7 rounded-lg bg-amber-600 text-white flex items-center justify-center text-xs font-bold shadow-md border-2 border-white">
               ${iconSymbol}
             </div>
-            <span class="absolute -bottom-4 bg-slate-900/90 text-amber-300 text-[9px] font-mono px-1.5 py-0.2 rounded border border-amber-800/80 whitespace-nowrap font-bold">
-              ${item.type}
+            <span class="absolute -bottom-4 bg-slate-900 text-amber-300 text-[9px] font-mono px-1 rounded border border-slate-700 whitespace-nowrap font-bold">
+              ${item.type || 'Hazard'}
             </span>
           </div>
         `;
       } else if (type === 'SHELTER') {
         html = `
           <div class="relative flex items-center justify-center cursor-pointer">
-            <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-500 ring-2 ring-emerald-400 text-white flex items-center justify-center text-xs font-black shadow-lg shadow-emerald-900/40">
+            <div class="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center text-xs font-bold shadow-md border-2 border-white">
               🏠
             </div>
-            <span class="absolute -bottom-4 bg-slate-900/90 text-emerald-300 text-[9px] font-mono px-1.5 py-0.2 rounded border border-emerald-800/80 whitespace-nowrap font-bold">
-              ${item.available || (item.capacity - (item.occupied || 0))} Beds
+            <span class="absolute -bottom-4 bg-slate-900 text-emerald-300 text-[9px] font-mono px-1 rounded border border-slate-700 whitespace-nowrap font-bold">
+              ${item.available_capacity || (item.capacity - (item.occupied || 0)) || 'Shelter'} Free
             </span>
           </div>
         `;
       } else if (type === 'HOSPITAL') {
         html = `
           <div class="relative flex items-center justify-center cursor-pointer">
-            <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-cyan-600 to-blue-500 ring-2 ring-cyan-400 text-white flex items-center justify-center text-xs font-black shadow-lg shadow-cyan-900/40">
+            <div class="w-7 h-7 rounded-lg bg-cyan-600 text-white flex items-center justify-center text-xs font-bold shadow-md border-2 border-white">
               🏥
             </div>
-            <span class="absolute -bottom-4 bg-slate-900/90 text-cyan-300 text-[9px] font-mono px-1.5 py-0.2 rounded border border-cyan-800/80 whitespace-nowrap font-bold">
-              ICU: ${item.icu_available || 0}
+            <span class="absolute -bottom-4 bg-slate-900 text-cyan-300 text-[9px] font-mono px-1 rounded border border-slate-700 whitespace-nowrap font-bold">
+              ICU: ${item.icu_available ?? item.icuAvailable ?? 0}
             </span>
           </div>
         `;
       } else if (type === 'RELIEF') {
         html = `
           <div class="relative flex items-center justify-center cursor-pointer">
-            <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-500 ring-2 ring-purple-400 text-white flex items-center justify-center text-xs font-black shadow-lg">
+            <div class="w-7 h-7 rounded-lg bg-purple-600 text-white flex items-center justify-center text-xs font-bold shadow-md border-2 border-white">
               📦
             </div>
-            <span class="absolute -bottom-4 bg-slate-900/90 text-purple-300 text-[9px] font-mono px-1.5 py-0.2 rounded border border-purple-800/80 whitespace-nowrap font-bold">
+            <span class="absolute -bottom-4 bg-slate-900 text-purple-300 text-[9px] font-mono px-1 rounded border border-slate-700 whitespace-nowrap font-bold">
               Depot
             </span>
           </div>
@@ -373,8 +273,8 @@ export function TacticalGISMap({
       return L.divIcon({
         className: 'custom-leaflet-marker',
         html: html,
-        iconSize: [32, 32],
-        iconAnchor: [16, 16],
+        iconSize: [28, 28],
+        iconAnchor: [14, 14],
       });
     };
 
@@ -444,32 +344,27 @@ export function TacticalGISMap({
     }
   }, [sosList, incidents, shelters, hospitals, reliefCenters, activeLayer]);
 
-  const flyToEntity = (lat: number, lon: number, entity: any) => {
-    if (!mapInstanceRef.current) return;
-    mapInstanceRef.current.flyTo([lat, lon], 15, { duration: 1.2 });
-    setSelectedEntity(entity);
-  };
-
   const centerOnAll = () => {
     if (!mapInstanceRef.current) return;
     mapInstanceRef.current.flyTo(initialCenter, zoom, { duration: 1 });
   };
 
+  const totalCount = sosList.length + incidents.length + shelters.length + hospitals.length;
+
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl flex flex-col space-y-0">
+    <div className="bg-[#0F1E36] border border-slate-800 rounded-2xl overflow-hidden shadow-xl flex flex-col space-y-0">
       
       {/* Top Map Action & Filter Bar */}
-      <div className="bg-slate-950/95 border-b border-slate-800 px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+      <div className="bg-[#07111E] border-b border-slate-800 px-4 py-3 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-blue-950 border border-blue-700/80 flex items-center justify-center text-blue-400">
-            <Compass className="w-4 h-4 animate-spin-slow" />
+          <div className="w-8 h-8 rounded-lg bg-blue-950 border border-blue-800 flex items-center justify-center text-blue-400">
+            <Compass className="w-4 h-4" />
           </div>
           <div>
             <h2 className="text-sm font-bold text-white flex items-center gap-2">
               <span>Tactical GIS Geointel Map</span>
-              <span className="text-[10px] bg-red-950 text-red-400 border border-red-800/80 px-2 py-0.2 rounded-full font-mono flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse"></span>
-                LIVE RADAR
+              <span className="text-[10px] bg-emerald-950 text-emerald-400 border border-emerald-800 px-2 py-0.2 rounded-full font-mono font-bold">
+                LIVE GIS
               </span>
             </h2>
             <p className="text-[11px] text-slate-400">
@@ -478,19 +373,19 @@ export function TacticalGISMap({
           </div>
         </div>
 
-        {/* Quick Layer Filter Buttons */}
-        <div className="flex items-center flex-wrap gap-1.5 bg-slate-900 p-1 rounded-xl border border-slate-800 text-xs">
+        {/* Quick Layer Filter Buttons with Real Live Numbers */}
+        <div className="flex items-center flex-wrap gap-1.5 bg-[#0F1E36] p-1 rounded-xl border border-slate-800 text-xs">
           <button
             onClick={() => setActiveLayer('ALL')}
-            className={`px-2.5 py-1 rounded-lg font-bold transition ${
+            className={`px-2.5 py-1 rounded-lg font-bold transition cursor-pointer ${
               activeLayer === 'ALL' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'
             }`}
           >
-            All ({sosList.length + incidents.length + shelters.length + hospitals.length})
+            All ({totalCount})
           </button>
           <button
             onClick={() => setActiveLayer('SOS')}
-            className={`px-2.5 py-1 rounded-lg font-bold transition flex items-center gap-1 ${
+            className={`px-2.5 py-1 rounded-lg font-bold transition flex items-center gap-1 cursor-pointer ${
               activeLayer === 'SOS' ? 'bg-red-600 text-white' : 'text-red-400 hover:bg-red-950/40'
             }`}
           >
@@ -499,7 +394,7 @@ export function TacticalGISMap({
           </button>
           <button
             onClick={() => setActiveLayer('INCIDENTS')}
-            className={`px-2.5 py-1 rounded-lg font-bold transition flex items-center gap-1 ${
+            className={`px-2.5 py-1 rounded-lg font-bold transition flex items-center gap-1 cursor-pointer ${
               activeLayer === 'INCIDENTS' ? 'bg-amber-600 text-white' : 'text-amber-400 hover:bg-amber-950/40'
             }`}
           >
@@ -508,7 +403,7 @@ export function TacticalGISMap({
           </button>
           <button
             onClick={() => setActiveLayer('SHELTERS')}
-            className={`px-2.5 py-1 rounded-lg font-bold transition flex items-center gap-1 ${
+            className={`px-2.5 py-1 rounded-lg font-bold transition flex items-center gap-1 cursor-pointer ${
               activeLayer === 'SHELTERS' ? 'bg-emerald-600 text-white' : 'text-emerald-400 hover:bg-emerald-950/40'
             }`}
           >
@@ -517,7 +412,7 @@ export function TacticalGISMap({
           </button>
           <button
             onClick={() => setActiveLayer('HOSPITALS')}
-            className={`px-2.5 py-1 rounded-lg font-bold transition flex items-center gap-1 ${
+            className={`px-2.5 py-1 rounded-lg font-bold transition flex items-center gap-1 cursor-pointer ${
               activeLayer === 'HOSPITALS' ? 'bg-cyan-600 text-white' : 'text-cyan-400 hover:bg-cyan-950/40'
             }`}
           >
@@ -529,23 +424,23 @@ export function TacticalGISMap({
         {/* Map Controls */}
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setMapTheme(mapTheme === 'DARK' ? 'STREET' : 'DARK')}
+            onClick={() => setMapTheme(mapTheme === 'STREET' ? 'DARK' : 'STREET')}
             title="Toggle Map Basemap"
-            className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 rounded-lg text-xs font-mono transition"
+            className="px-2.5 py-1 bg-[#0F1E36] hover:bg-slate-800 border border-slate-700 text-slate-300 rounded-lg text-xs font-mono transition cursor-pointer"
           >
-            {mapTheme === 'DARK' ? '🌙 Dark Grid' : '☀️ Street Grid'}
+            {mapTheme === 'STREET' ? '🌙 Dark Grid' : '☀️ Street Grid'}
           </button>
           <button
             onClick={centerOnAll}
             title="Recenter Map"
-            className="p-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 rounded-lg transition"
+            className="p-1.5 bg-[#0F1E36] hover:bg-slate-800 border border-slate-700 text-slate-300 rounded-lg transition cursor-pointer"
           >
             <Crosshair className="w-4 h-4 text-blue-400" />
           </button>
           <button
             onClick={loadGISData}
             title="Refresh GIS Feeds"
-            className="p-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 rounded-lg transition"
+            className="p-1.5 bg-[#0F1E36] hover:bg-slate-800 border border-slate-700 text-slate-300 rounded-lg transition cursor-pointer"
           >
             <RefreshCw className={`w-4 h-4 text-emerald-400 ${isLoading ? 'animate-spin' : ''}`} />
           </button>
@@ -555,140 +450,79 @@ export function TacticalGISMap({
       {/* Main Map Body Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-4 relative" style={{ minHeight: height }}>
         
-        {/* Leaflet Map Canvas (Takes 3 columns on large screens) */}
+        {/* Leaflet Map Canvas */}
         <div className="lg:col-span-3 relative h-full min-h-[480px]">
           <div ref={mapContainerRef} className="w-full h-full" style={{ height: '100%', minHeight: '480px' }} />
 
-          {/* Floating Coordinate HUD overlay */}
-          <div className="absolute top-3 left-3 bg-slate-950/90 backdrop-blur-md border border-slate-800/90 rounded-xl px-3 py-2 text-[10px] text-slate-300 font-mono space-y-0.5 shadow-xl pointer-events-none z-[1000]">
+          {/* Coordinate HUD overlay */}
+          <div className="absolute top-3 left-3 bg-[#07111E]/95 border border-slate-800 rounded-xl px-3 py-2 text-[10px] text-slate-300 font-mono space-y-0.5 shadow-lg pointer-events-none z-[1000]">
             <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
               <span className="font-bold text-white">GRID: SECTOR 4 NORTH</span>
             </div>
-            <div className="text-slate-400">LAT: 28.6139° N • LON: 77.2090° E</div>
+            <div className="text-slate-400">
+              LAT: {initialCenter[0].toFixed(4)}° N • LON: {initialCenter[1].toFixed(4)}° E
+            </div>
           </div>
         </div>
 
-        {/* Tactical Feed & Selected Entity Sidebar (Takes 1 column) */}
-        <div className="bg-slate-950 border-t lg:border-t-0 lg:border-l border-slate-800 p-4 flex flex-col justify-between h-full max-h-[620px] overflow-y-auto space-y-4">
-          
-          {/* Selected Pin Details Box */}
+        {/* Right Sidebar: Active Entity Telemetry Inspector */}
+        <div className="bg-[#07111E] border-t lg:border-t-0 lg:border-l border-slate-800 p-4 flex flex-col justify-between overflow-y-auto max-h-[620px]">
           {selectedEntity ? (
-            <div className="bg-slate-900 border border-blue-500/40 rounded-xl p-3.5 space-y-2.5 shadow-lg relative">
-              <button
-                onClick={() => setSelectedEntity(null)}
-                className="absolute top-2.5 right-2.5 text-slate-400 hover:text-white text-xs font-bold"
-              >
-                ✕
-              </button>
-
-              <div className="flex items-center gap-2">
-                <span className="text-base">
-                  {selectedEntity.type === 'SOS' ? '🚨' : selectedEntity.type === 'INCIDENT' ? '⚠️' : selectedEntity.type === 'SHELTER' ? '🏠' : '🏥'}
+            <div className="space-y-4">
+              <div className="pb-3 border-b border-slate-800 flex items-center justify-between">
+                <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400">
+                  Inspecting {selectedEntity.type}
                 </span>
-                <div>
-                  <span className="text-[10px] font-mono text-blue-400 font-bold uppercase tracking-wider block">
-                    {selectedEntity.type} INSPECTION
-                  </span>
-                  <h4 className="text-xs font-bold text-white truncate max-w-[180px]">
-                    {selectedEntity.data.name || selectedEntity.data.title || selectedEntity.data.id}
-                  </h4>
-                </div>
-              </div>
-
-              <p className="text-[11px] text-slate-300 leading-relaxed bg-slate-950/80 p-2.5 rounded-lg border border-slate-800">
-                {selectedEntity.data.message || selectedEntity.data.description || selectedEntity.data.address || 'Emergency facility active.'}
-              </p>
-
-              <div className="grid grid-cols-2 gap-2 text-[10px] font-mono text-slate-400">
-                <div className="bg-slate-950 p-1.5 rounded border border-slate-800">
-                  <span className="block text-slate-500">Status</span>
-                  <span className="text-emerald-400 font-bold">{selectedEntity.data.status || 'ACTIVE'}</span>
-                </div>
-                <div className="bg-slate-950 p-1.5 rounded border border-slate-800">
-                  <span className="block text-slate-500">Coordinates</span>
-                  <span className="text-slate-300 font-bold truncate">
-                    {selectedEntity.data.latitude?.toFixed(4)}, {selectedEntity.data.longitude?.toFixed(4)}
-                  </span>
-                </div>
-              </div>
-
-              {selectedEntity.data.user_phone && (
-                <div className="text-[10px] text-slate-300 flex items-center gap-1 font-mono">
-                  <Phone className="w-3 h-3 text-emerald-400" />
-                  <span>Contact: {selectedEntity.data.user_phone}</span>
-                </div>
-              )}
-
-              <div className="flex gap-2 pt-1">
                 <button
-                  onClick={() => flyToEntity(selectedEntity.data.latitude, selectedEntity.data.longitude, selectedEntity)}
-                  className="flex-1 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold transition flex items-center justify-center gap-1 shadow"
+                  onClick={() => setSelectedEntity(null)}
+                  className="text-xs text-slate-400 hover:text-white"
                 >
-                  <Crosshair className="w-3 h-3" /> Focus Target
+                  ✕ Close
                 </button>
+              </div>
+
+              <div>
+                <h4 className="text-sm font-bold text-white">
+                  {selectedEntity.data.name || selectedEntity.data.title || selectedEntity.data.message || 'Entity Details'}
+                </h4>
+                <p className="text-xs text-slate-400 mt-1 font-mono">
+                  {selectedEntity.data.address || selectedEntity.data.description || 'Disaster Resource Node'}
+                </p>
+              </div>
+
+              <div className="bg-[#0F1E36] p-3 rounded-xl border border-slate-800 space-y-1.5 text-xs font-mono">
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Latitude:</span>
+                  <span className="text-white">{selectedEntity.data.latitude?.toFixed(4)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Longitude:</span>
+                  <span className="text-white">{selectedEntity.data.longitude?.toFixed(4)}</span>
+                </div>
+                {selectedEntity.data.severity && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Severity:</span>
+                    <span className="text-red-400 font-bold">{selectedEntity.data.severity}</span>
+                  </div>
+                )}
+                {selectedEntity.data.status && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Status:</span>
+                    <span className="text-emerald-400 font-bold">{selectedEntity.data.status}</span>
+                  </div>
+                )}
               </div>
             </div>
           ) : (
-            <div className="bg-slate-900/60 border border-dashed border-slate-800 rounded-xl p-3.5 text-center text-xs text-slate-400">
-              <Eye className="w-6 h-6 text-slate-600 mx-auto mb-1.5" />
-              <span>Select any marker on the map to inspect live telemetry & responder actions.</span>
+            <div className="h-full flex flex-col items-center justify-center text-center p-4 text-slate-400 text-xs">
+              <p>Select any marker on the map to inspect live telemetry & responder actions.</p>
             </div>
           )}
-
-          {/* Live Geotagged Distress Signals List */}
-          <div className="space-y-2 flex-1 overflow-y-auto">
-            <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center justify-between">
-              <span>🚨 Active Spatial Alerts</span>
-              <span className="text-[10px] text-red-400 font-mono">{sosList.length} Active</span>
-            </h3>
-
-            <div className="space-y-2">
-              {sosList.map((sos) => (
-                <div
-                  key={sos.id}
-                  onClick={() => flyToEntity(sos.latitude, sos.longitude, { type: 'SOS', data: sos })}
-                  className="p-2.5 rounded-xl bg-slate-900 hover:bg-slate-850 border border-slate-800 hover:border-red-500/50 cursor-pointer transition space-y-1 group"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-red-400 flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-ping"></span>
-                      {sos.id}
-                    </span>
-                    <span className="text-[9px] bg-red-950 text-red-300 border border-red-800 px-1.5 py-0.2 rounded font-mono font-bold">
-                      {sos.severity}
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-slate-300 line-clamp-2 leading-tight">
-                    {sos.message}
-                  </p>
-                  <div className="text-[9px] text-slate-500 font-mono flex items-center justify-between pt-0.5">
-                    <span>{sos.user_name || 'Citizen'}</span>
-                    <span className="group-hover:text-blue-400">Fly to coordinates →</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Bottom Telemetry Summary */}
-          <div className="pt-3 border-t border-slate-800 grid grid-cols-2 gap-2 text-[10px] font-mono">
-            <div className="bg-slate-900 p-2 rounded-lg border border-slate-800">
-              <span className="text-slate-500 block">Shelter Space</span>
-              <span className="text-emerald-400 font-bold text-xs">
-                {shelters.reduce((acc, s) => acc + (s.available || (s.capacity - (s.occupied || 0))), 0)} Available
-              </span>
-            </div>
-            <div className="bg-slate-900 p-2 rounded-lg border border-slate-800">
-              <span className="text-slate-500 block">ICU Beds Live</span>
-              <span className="text-cyan-400 font-bold text-xs">
-                {hospitals.reduce((acc, h) => acc + (h.icu_available || 0), 0)} Beds
-              </span>
-            </div>
-          </div>
-
         </div>
+
       </div>
+
     </div>
   );
 }

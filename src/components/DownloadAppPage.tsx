@@ -35,9 +35,9 @@ export const DownloadAppPage: React.FC<DownloadAppPageProps> = ({ onProceedToWeb
       <header className="max-w-md mx-auto w-full flex items-center justify-between py-2 relative z-10">
         <div className="flex items-center gap-2.5">
           <img 
-            src="/app-icon.jpg" 
+            src="/app-icon-transparent.png" 
             alt="VajraNet Logo" 
-            className="w-8 h-8 rounded-xl border border-cyan-400/50 shadow-md object-cover" 
+            className="w-8 h-8 rounded-xl object-contain drop-shadow" 
           />
           <div>
             <span className="font-black text-sm tracking-wider block text-white uppercase">VAJRANET</span>
@@ -54,11 +54,11 @@ export const DownloadAppPage: React.FC<DownloadAppPageProps> = ({ onProceedToWeb
       <main className="max-w-md mx-auto w-full my-auto py-6 space-y-6 relative z-10">
         
         <div className="text-center space-y-3">
-          <div className="inline-flex items-center justify-center p-1.5 rounded-3xl bg-[#0B2545]/80 border-2 border-cyan-400/50 shadow-2xl">
+          <div className="inline-flex items-center justify-center p-2 rounded-3xl bg-[#0B2545]/90 border border-cyan-400/50 shadow-2xl backdrop-blur-md">
             <img 
-              src="/app-icon.jpg" 
+              src="/app-icon-transparent.png" 
               alt="VajraNet Icon" 
-              className="w-20 h-20 rounded-2xl shadow-inner object-cover" 
+              className="w-20 h-20 object-contain drop-shadow-xl" 
             />
           </div>
 

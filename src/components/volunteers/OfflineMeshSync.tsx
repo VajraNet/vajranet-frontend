@@ -206,7 +206,7 @@ export function OfflineMeshSync() {
   function handleSimulateNewMeshPacket() {
     const newId = `MESH-${Math.random() > 0.5 ? 'SOS' : 'INC'}-${Date.now()}`;
     const isSos = newId.includes('SOS');
-    const newPacket = {
+    const newPacket: any = {
       message_id: newId,
       type: isSos ? 'SOS' : 'INCIDENT',
       origin: `Peer-Relay-${Math.floor(10 + Math.random() * 90)}`,
@@ -225,28 +225,32 @@ export function OfflineMeshSync() {
         severity: 'CRITICAL'
       }
     };
-    setQueuedPackets(prev => [newPacket, ...prev]);
+    setQueuedPackets((prev: any) => [newPacket, ...prev]);
   }
 
   return (
     <div className="space-y-6">
       
       {/* Header Banner */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
+      <div className="bg-[#0F1E36] border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-800">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-blue-950 border border-blue-700/80 flex items-center justify-center text-blue-400">
-              <Radio className="w-5 h-5 animate-pulse" />
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-xl bg-white border border-slate-700 p-1 flex items-center justify-center shrink-0">
+              <img 
+                src="/vajranet-icon.jpg" 
+                alt="VajraNet Mesh Relay" 
+                className="w-full h-full object-contain rounded" 
+              />
             </div>
             <div>
               <h2 className="text-base font-bold text-white flex items-center gap-2">
                 <span>P2P Ad-Hoc Mesh Telemetry & Gateway Bridge</span>
-                <span className="text-[10px] bg-emerald-950 text-emerald-400 border border-emerald-800 px-2 py-0.2 rounded-full font-mono">
+                <span className="text-[10px] bg-emerald-950 text-emerald-400 border border-emerald-800 px-2 py-0.2 rounded-full font-mono font-bold">
                   DTN READY
                 </span>
               </h2>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Delay-Tolerant Store-and-Forward packet relay over Bluetooth LE & Wi-Fi Direct.
+              <p className="text-xs text-slate-400 font-mono mt-0.5">
+                VajraNet Disaster Mesh • Delay-Tolerant Store-and-Forward relay over BLE & Wi-Fi Direct
               </p>
             </div>
           </div>

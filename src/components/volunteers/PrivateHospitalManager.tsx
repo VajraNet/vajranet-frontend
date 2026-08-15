@@ -23,34 +23,15 @@ export function PrivateHospitalManager() {
 
   async function fetchHospitals() {
     try {
-      const res = await apiClient.get('/resources/hospitals');
+      const res = await apiClient.get('/hospitals');
       const data = res.data?.data || res.data;
-      if (Array.isArray(data) && data.length > 0) {
+      if (Array.isArray(data)) {
         setHospitals(data);
       } else {
-        throw new Error('Empty');
+        setHospitals([]);
       }
     } catch {
-      setHospitals((prev) => prev.length > 0 ? prev : [
-        {
-          id: 'phosp-1',
-          name: 'St. Jude Charitable Trauma Clinic',
-          address: 'Ring Road, Sector 7',
-          available_beds: 18,
-          icu_available: 4,
-          contact: '+91 98765 77777',
-          emergency_available: true,
-        },
-        {
-          id: 'phosp-2',
-          name: 'Apex Field Respite Center',
-          address: 'Naval Dock Gate 3',
-          available_beds: 32,
-          icu_available: 8,
-          contact: '+91 98765 33333',
-          emergency_available: true,
-        },
-      ]);
+      setHospitals([]);
     } finally {
       setLoading(false);
     }
@@ -61,200 +42,213 @@ export function PrivateHospitalManager() {
     if (!name.trim()) return;
 
     setSubmitting(true);
-    const newHospital = {
-      name: name.trim(),
-      address: address.trim() || 'Sector 7 Trauma Block',
-      available_beds: parseInt(availableBeds, 10) || 20,
-      icu_available: parseInt(icuAvailable, 10) || 4,
-      emergency_available: true,
-      contact: contact.trim(),
-      latitude: parseFloat(latitude) || 28.6139,
-      longitude: parseFloat(longitude) || 77.2090,
-      hospital_type: 'PRIVATE_CHARITY'
-    };
-
     try {
-      const res = await apiClient.post('/resources/hospitals', newHospital);
-      const created = res.data?.data || res.data || { ...newHospital, id: `hosp-${Date.now()}` };
-      setHospitals((prev) => [created, ...prev]);
+      const payload = {
+        name: name.trim(),
+        address: address.trim(),
+        total_beds: 50,
+        available_beds: parseInt(availableBeds) || 10,
+        icu_total: 10,
+        icu_available: parseInt(icuAvailable) || 2,
+        phone: contact.trim(),
+        latitude: parseFloat(latitude) || 28.6139,
+        longitude: parseFloat(longitude) || 77.2090,
+        emergency_available: true,
+        type: 'PRIVATE',
+      };
+
+      const res = await apiClient.post('/hospitals', payload);
+      const created = res.data?.data || res.data || { ...payload, id: `phosp-${Date.now()}` };
+
+      setHospitals((prev) => [...prev, created]);
       setIsModalOpen(false);
       setName('');
       setAddress('');
-    } catch (err) {
-      setHospitals((prev) => [{ ...newHospital, id: `hosp-${Date.now()}` }, ...prev]);
-      setIsModalOpen(false);
+      window.dispatchEvent(new CustomEvent('vajranet_data_updated'));
+    } catch (err: any) {
+      console.warn('Failed to register hospital:', err);
     } finally {
       setSubmitting(false);
     }
   }
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-5">
-      
-      {/* Header */}
+    <div className="bg-[#0F1E36] border border-slate-800 rounded-2xl p-5 lg:p-6 space-y-6 shadow-xl">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-800">
         <div>
-          <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2">
-            <span>🏥 Private & Charity Clinics Network</span>
-            <span className="text-xs bg-blue-950 text-blue-300 border border-blue-800 px-2 py-0.5 rounded-full font-mono font-bold">
-              {hospitals.length} Healthcare Points
+          <h2 className="text-base font-bold text-white flex items-center gap-2">
+            <HeartPulse className="w-5 h-5 text-cyan-400" />
+            <span>Private Clinics & Volunteer Medical Units</span>
+            <span className="text-[10px] bg-cyan-950 text-cyan-400 border border-cyan-800 px-2 py-0.2 rounded-full font-mono">
+              {hospitals.length} CLINICS
             </span>
           </h2>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Private hospital ICU and emergency bed capacity allocated for urgent disaster intake.
+          <p className="text-xs text-slate-400 mt-0.5 font-mono">
+            Register private clinics, charitable nursing homes, and field trauma triage posts.
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="px-3.5 py-2 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white text-xs font-bold rounded-xl shadow-lg transition flex items-center gap-1.5 cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Register Private Beds / Clinic</span>
-          </button>
-
+        <div className="flex items-center gap-2">
           <button
             onClick={fetchHospitals}
-            className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition cursor-pointer"
-            title="Refresh"
+            className="p-2 bg-[#07111E] hover:bg-slate-800 text-slate-300 border border-slate-700 rounded-xl transition cursor-pointer"
+            title="Refresh Facilities"
           >
-            <RefreshCw className="w-3.5 h-3.5" />
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl flex items-center gap-1.5 transition cursor-pointer shadow-sm"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Register Clinic</span>
           </button>
         </div>
       </div>
 
-      {/* Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {hospitals.map((h) => (
-          <div key={h.id} className="bg-slate-950/80 border border-slate-800 hover:border-slate-700 rounded-xl p-4 space-y-2.5 transition shadow-md">
-            <div className="flex items-start justify-between">
-              <div>
-                <h3 className="text-sm font-bold text-slate-100">{h.name}</h3>
-                <p className="text-xs text-slate-400 font-mono mt-0.5 flex items-center gap-1">
-                  <MapPin className="w-3 h-3 text-cyan-400" />
-                  <span>{h.address || 'Medical Sector'}</span>
-                </p>
-              </div>
-              <span className="text-[10px] bg-blue-950 text-blue-300 border border-blue-700 px-2 py-0.5 rounded-full font-mono font-bold">
-                {h.emergency_available ? '🟢 Emergency Ready' : '🟡 Limited'}
-              </span>
-            </div>
+      {/* Grid of Hospitals */}
+      {hospitals.length === 0 && !loading ? (
+        <div className="p-8 text-center bg-[#07111E] border border-slate-800 rounded-xl text-slate-400 text-xs font-mono">
+          No medical facilities registered yet. Click "Register Clinic" to add one.
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {hospitals.map((h) => {
+            const availBeds = h.available_beds ?? h.availableBeds ?? 0;
+            const availIcu = h.icu_available ?? h.icuAvailable ?? h.available_icu_beds ?? 0;
 
-            <div className="grid grid-cols-3 gap-2 text-xs font-mono bg-slate-900 p-2.5 rounded-lg border border-slate-800">
-              <div>
-                <span className="text-slate-500 block text-[10px]">General Beds</span>
-                <span className="text-emerald-400 font-bold">{h.available_beds || h.availableBeds || 12}</span>
+            return (
+              <div
+                key={h.id}
+                className="bg-[#07111E] border border-slate-800 rounded-xl p-4 flex flex-col justify-between space-y-4 hover:border-slate-700 transition"
+              >
+                <div>
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                    <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded border bg-cyan-950 text-cyan-400 border-cyan-800">
+                      OPERATIONAL
+                    </span>
+                    <span className="text-[10px] text-slate-500 font-mono">CLINIC POST</span>
+                  </div>
+
+                  <h3 className="text-sm font-bold text-white mt-2.5">{h.name}</h3>
+                  <p className="text-xs text-slate-400 font-mono mt-0.5 flex items-center gap-1">
+                    <MapPin className="w-3 h-3 text-slate-500" />
+                    <span>{h.address}</span>
+                  </p>
+                  {(h.contact || h.phone || h.contact_phone) && (
+                    <p className="text-xs text-slate-400 font-mono mt-0.5 flex items-center gap-1">
+                      <Phone className="w-3 h-3 text-slate-500" />
+                      <span>{h.contact || h.phone || h.contact_phone}</span>
+                    </p>
+                  )}
+
+                  <div className="mt-4 grid grid-cols-2 gap-2 text-xs font-mono">
+                    <div className="bg-[#0F1E36] p-2.5 rounded-lg border border-slate-800">
+                      <span className="text-slate-400 block text-[10px]">Beds:</span>
+                      <span className="text-emerald-400 font-bold">{availBeds} Available</span>
+                    </div>
+                    <div className="bg-[#0F1E36] p-2.5 rounded-lg border border-slate-800">
+                      <span className="text-slate-400 block text-[10px]">ICU:</span>
+                      <span className="text-cyan-400 font-bold">{availIcu} Available</span>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div>
-                <span className="text-slate-500 block text-[10px]">ICU Live</span>
-                <span className="text-cyan-400 font-bold">{h.icu_available || h.icuAvailable || 4} Beds</span>
-              </div>
-              <div>
-                <span className="text-slate-500 block text-[10px]">Helpline</span>
-                <span className="text-slate-300 font-bold">{h.contact || '+91 108'}</span>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Register Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-[#07172C]/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn">
-          <div className="bg-[#0B2545] border border-[#D4AF37]/50 rounded-3xl shadow-2xl max-w-md w-full overflow-hidden text-white flex flex-col">
-            
-            <div className="px-5 py-4 border-b border-slate-700 flex items-center justify-between bg-[#07172C]">
-              <div className="flex items-center gap-2">
-                <HeartPulse className="w-5 h-5 text-blue-400" />
-                <h3 className="text-sm font-bold text-white">Register Private Clinic / Bed Allocation</h3>
-              </div>
-              <button onClick={() => setIsModalOpen(false)} className="p-1 rounded-lg text-slate-400 hover:text-white">
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#0F1E36] border border-slate-700 rounded-2xl p-6 max-w-md w-full text-white space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <h3 className="text-base font-bold">Register Clinic / Medical Post</h3>
+              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-white">
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <form onSubmit={handleCreate} className="p-5 space-y-3.5">
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-300 font-mono">Clinic / Hospital Name</label>
+            <form onSubmit={handleCreate} className="space-y-3 font-mono text-xs">
+              <div>
+                <label className="block text-slate-300 mb-1">Clinic Name</label>
                 <input
                   type="text"
-                  required
-                  placeholder="e.g. LifeCare Emergency Care Unit"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full bg-[#07172C] border border-slate-700 focus:border-blue-400 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none"
+                  placeholder="e.g. St. Jude Charitable Clinic"
+                  required
+                  className="w-full bg-[#07111E] border border-slate-700 rounded-lg p-2.5 text-white focus:border-cyan-500 focus:outline-none"
                 />
               </div>
 
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-300 font-mono">Address / Location</label>
+              <div>
+                <label className="block text-slate-300 mb-1">Address / Landmark</label>
                 <input
                   type="text"
-                  required
-                  placeholder="e.g. Ring Road Trauma Complex"
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}
-                  className="w-full bg-[#07172C] border border-slate-700 focus:border-blue-400 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none"
+                  placeholder="e.g. Ring Road, Sector 7"
+                  required
+                  className="w-full bg-[#07111E] border border-slate-700 rounded-lg p-2.5 text-white focus:border-cyan-500 focus:outline-none"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-300 font-mono">Available Beds</label>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-slate-300 mb-1">Available Beds</label>
                   <input
                     type="number"
-                    min="1"
                     value={availableBeds}
                     onChange={(e) => setAvailableBeds(e.target.value)}
-                    className="w-full bg-[#07172C] border border-slate-700 focus:border-blue-400 rounded-xl px-3 py-2 text-xs text-white font-mono focus:outline-none"
+                    required
+                    className="w-full bg-[#07111E] border border-slate-700 rounded-lg p-2.5 text-white focus:border-cyan-500 focus:outline-none"
                   />
                 </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-300 font-mono">ICU Units</label>
+                <div>
+                  <label className="block text-slate-300 mb-1">Available ICU</label>
                   <input
                     type="number"
-                    min="0"
                     value={icuAvailable}
                     onChange={(e) => setIcuAvailable(e.target.value)}
-                    className="w-full bg-[#07172C] border border-slate-700 focus:border-blue-400 rounded-xl px-3 py-2 text-xs text-white font-mono focus:outline-none"
+                    required
+                    className="w-full bg-[#07111E] border border-slate-700 rounded-lg p-2.5 text-white focus:border-cyan-500 focus:outline-none"
                   />
                 </div>
               </div>
 
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-300 font-mono">Emergency Contact</label>
+              <div>
+                <label className="block text-slate-300 mb-1">Contact Phone</label>
                 <input
                   type="text"
                   value={contact}
                   onChange={(e) => setContact(e.target.value)}
-                  className="w-full bg-[#07172C] border border-slate-700 focus:border-blue-400 rounded-xl px-3.5 py-2 text-xs text-white font-mono focus:outline-none"
+                  required
+                  className="w-full bg-[#07111E] border border-slate-700 rounded-lg p-2.5 text-white focus:border-cyan-500 focus:outline-none"
                 />
               </div>
 
-              <div className="pt-2 flex gap-2">
+              <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 rounded-xl text-xs font-bold text-slate-300"
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-xl text-xs font-black text-white shadow-lg flex items-center justify-center gap-1.5"
+                  className="px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white font-bold rounded-lg cursor-pointer"
                 >
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>Register Beds →</span>
+                  {submitting ? 'Registering...' : 'Register Clinic'}
                 </button>
               </div>
             </form>
-
           </div>
         </div>
       )}
-
     </div>
   );
 }

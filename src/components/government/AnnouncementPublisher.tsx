@@ -197,7 +197,7 @@ export function AnnouncementPublisher() {
                     <span className="text-xs text-slate-400 font-medium">Target: {anc.target_area}</span>
                   </div>
                   <span className="text-xs text-slate-500">
-                    {new Date(anc.issued_at).toLocaleTimeString()}
+                    {new Date(anc.issued_at || anc.created_at || Date.now()).toLocaleTimeString()}
                   </span>
                 </div>
 

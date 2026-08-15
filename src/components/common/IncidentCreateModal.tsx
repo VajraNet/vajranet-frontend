@@ -67,7 +67,6 @@ export function IncidentCreateModal({ isOpen, onClose, onSuccess, reporterRole =
       return data.secure_url || data.url;
     } catch (err) {
       console.warn('Cloudinary upload fallback to data URL:', err);
-      // Fallback: Return data URL
       return imagePreview || '';
     }
   };
@@ -104,7 +103,7 @@ export function IncidentCreateModal({ isOpen, onClose, onSuccess, reporterRole =
       const res = await apiClient.post('/incidents', payload);
       const created = res.data?.data || res.data || { ...payload, id: `inc-${Date.now()}` };
 
-      // Broadcast to local P2P web mesh bus
+      // Broadcast to local P2P web mesh bus & trigger app-wide count re-sync
       try {
         const bc = new BroadcastChannel('vajranet_p2p_mesh_bus');
         bc.postMessage({
@@ -114,6 +113,8 @@ export function IncidentCreateModal({ isOpen, onClose, onSuccess, reporterRole =
         });
         setTimeout(() => bc.close(), 100);
       } catch (e) {}
+
+      window.dispatchEvent(new CustomEvent('vajranet_data_updated'));
 
       onSuccess(created);
       onClose();
@@ -126,188 +127,175 @@ export function IncidentCreateModal({ isOpen, onClose, onSuccess, reporterRole =
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#07172C]/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn">
-      <div className="bg-[#0B2545] border border-[#D4AF37]/50 rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden text-white flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="bg-[#0F1E36] border border-slate-700 rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden text-white flex flex-col max-h-[90vh]">
         
         {/* Header */}
-        <div className="px-5 py-4 border-b border-slate-700/80 flex items-center justify-between bg-[#07172C]">
+        <div className="px-5 py-4 border-b border-slate-800 flex items-center justify-between bg-[#07111E]">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-rose-950 border border-rose-600/60 flex items-center justify-center text-rose-400">
-              <Flame className="w-5 h-5 animate-pulse" />
+            <div className="w-8 h-8 rounded-lg bg-red-950 border border-red-800 flex items-center justify-center text-red-400">
+              <Flame className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="text-sm font-black text-white tracking-wide">Report Disaster Hazard / Incident</h3>
-              <p className="text-[10px] text-[#D4AF37] font-mono">Instant Cloudinary & Multi-Feed Broadcast</p>
+              <h3 className="text-sm font-bold text-white tracking-wide">Report Disaster Hazard / Incident</h3>
+              <p className="text-[10px] text-slate-400 font-mono">Real-Time Database Broadcast</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-xl bg-slate-800 text-slate-400 hover:text-white cursor-pointer transition"
+            className="text-slate-400 hover:text-white p-1 rounded-lg transition"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Form Body */}
-        <form onSubmit={handleSubmit} className="p-5 space-y-4 overflow-y-auto flex-1">
+        {/* Scrollable Form Body */}
+        <form onSubmit={handleSubmit} className="p-5 overflow-y-auto space-y-4 text-xs font-mono">
+          
           {errorMessage && (
-            <div className="p-3 bg-rose-950/80 border border-rose-700/60 rounded-xl text-rose-300 text-xs flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 shrink-0" />
+            <div className="p-3 bg-red-950/80 border border-red-800 rounded-xl text-red-300 flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-red-400" />
               <span>{errorMessage}</span>
             </div>
           )}
 
           {/* Title */}
           <div className="space-y-1">
-            <label className="text-xs font-bold text-slate-300 font-mono">Incident Title</label>
+            <label className="text-slate-300 font-bold block">Incident Title</label>
             <input
               type="text"
-              required
-              placeholder="e.g. Flash Flood Waterlogging near Sector 4"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="w-full bg-[#07172C] border border-slate-700 focus:border-cyan-400 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none transition"
+              placeholder="e.g. Flash Flood Near Railway Bridge"
+              required
+              className="w-full bg-[#07111E] border border-slate-700 rounded-xl p-2.5 text-white focus:border-blue-500 focus:outline-none"
             />
           </div>
 
-          {/* Hazard Type & Severity Grid */}
+          {/* Type & Severity in 2 cols */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-300 font-mono">Hazard Type</label>
+              <label className="text-slate-300 font-bold block">Hazard Category</label>
               <select
                 value={type}
                 onChange={(e) => setType(e.target.value)}
-                className="w-full bg-[#07172C] border border-slate-700 focus:border-cyan-400 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none transition cursor-pointer"
+                className="w-full bg-[#07111E] border border-slate-700 rounded-xl p-2.5 text-white focus:border-blue-500 focus:outline-none"
               >
                 <option value="FLOOD">🌊 Flood / Waterlogging</option>
-                <option value="FIRE">🔥 Fire Outbreak</option>
-                <option value="STRUCTURAL_COLLAPSE">🏚️ Building Collapse</option>
-                <option value="LANDSLIDE">⛰️ Landslide / Rockfall</option>
-                <option value="MEDICAL_EMERGENCY">🚑 Medical Trauma</option>
-                <option value="ROADBLOCK">🚧 Roadblock / Obstruction</option>
+                <option value="FIRE">🔥 Fire / Explosion</option>
+                <option value="LANDSLIDE">⛰️ Landslide</option>
+                <option value="BUILDING_COLLAPSE">🏚️ Structural Collapse</option>
+                <option value="MEDICAL">🏥 Medical Emergency</option>
                 <option value="OTHER">⚠️ Other Hazard</option>
               </select>
             </div>
 
             <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-300 font-mono">Severity Priority</label>
+              <label className="text-slate-300 font-bold block">Severity Level</label>
               <select
                 value={severity}
                 onChange={(e) => setSeverity(e.target.value)}
-                className="w-full bg-[#07172C] border border-slate-700 focus:border-cyan-400 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none transition cursor-pointer"
+                className="w-full bg-[#07111E] border border-slate-700 rounded-xl p-2.5 text-white focus:border-blue-500 focus:outline-none"
               >
-                <option value="CRITICAL">🚨 CRITICAL (Immediate Danger)</option>
-                <option value="HIGH">🔴 HIGH Urgency</option>
-                <option value="MEDIUM">🟡 MEDIUM Caution</option>
-                <option value="LOW">🟢 LOW Advisory</option>
+                <option value="CRITICAL">🔴 Critical (Immediate Threat)</option>
+                <option value="HIGH">🟠 High (Urgent Response)</option>
+                <option value="MEDIUM">🟡 Medium (Caution)</option>
+                <option value="LOW">🟢 Low (Monitoring)</option>
               </select>
             </div>
           </div>
 
-          {/* Description */}
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-slate-300 font-mono">Detailed Situation Description</label>
-            <textarea
-              required
-              rows={3}
-              placeholder="Describe ground reality, trapped victims, required equipment, road conditions..."
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              className="w-full bg-[#07172C] border border-slate-700 focus:border-cyan-400 rounded-xl p-3 text-xs text-white focus:outline-none transition resize-none"
-            />
-          </div>
-
-          {/* GPS Coordinates */}
+          {/* Coordinates in 2 cols */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-300 font-mono flex items-center gap-1">
-                <MapPin className="w-3 h-3 text-cyan-400" /> Latitude
-              </label>
+              <label className="text-slate-300 font-bold block">Latitude</label>
               <input
                 type="text"
                 value={latitude}
                 onChange={(e) => setLatitude(e.target.value)}
-                className="w-full bg-[#07172C] border border-slate-700 focus:border-cyan-400 rounded-xl px-3 py-2 text-xs text-white font-mono focus:outline-none transition"
+                required
+                className="w-full bg-[#07111E] border border-slate-700 rounded-xl p-2.5 text-white focus:border-blue-500 focus:outline-none"
               />
             </div>
             <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-300 font-mono flex items-center gap-1">
-                <MapPin className="w-3 h-3 text-cyan-400" /> Longitude
-              </label>
+              <label className="text-slate-300 font-bold block">Longitude</label>
               <input
                 type="text"
                 value={longitude}
                 onChange={(e) => setLongitude(e.target.value)}
-                className="w-full bg-[#07172C] border border-slate-700 focus:border-cyan-400 rounded-xl px-3 py-2 text-xs text-white font-mono focus:outline-none transition"
+                required
+                className="w-full bg-[#07111E] border border-slate-700 rounded-xl p-2.5 text-white focus:border-blue-500 focus:outline-none"
               />
             </div>
           </div>
 
-          {/* Image Upload with Cloudinary Preview */}
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-slate-300 font-mono flex items-center gap-1.5">
-              <Camera className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Attach Proof / Ground Photo (Cloudinary Integrated)</span>
-            </label>
+          {/* Detailed Description */}
+          <div className="space-y-1">
+            <label className="text-slate-300 font-bold block">Detailed Situation Description</label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={3}
+              placeholder="Describe casualties, water depth, blocked routes, trapped citizens..."
+              required
+              className="w-full bg-[#07111E] border border-slate-700 rounded-xl p-2.5 text-white focus:border-blue-500 focus:outline-none"
+            />
+          </div>
 
-            <div className="flex items-center gap-3">
-              <label className="flex-1 border-2 border-dashed border-slate-700 hover:border-cyan-400/80 rounded-2xl p-3 flex flex-col items-center justify-center gap-1.5 cursor-pointer bg-[#07172C] transition">
-                <Upload className="w-5 h-5 text-cyan-400" />
-                <span className="text-xs text-slate-300 font-mono">Click to Select / Take Photo</span>
-                <span className="text-[10px] text-slate-500 font-mono">JPG, PNG, WebP up to 10MB</span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageChange}
-                  className="hidden"
-                />
-              </label>
-
-              {imagePreview && (
-                <div className="relative w-20 h-20 rounded-2xl border border-cyan-400/60 overflow-hidden shrink-0 shadow-lg">
-                  <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
+          {/* Image Evidence Upload */}
+          <div className="space-y-1">
+            <label className="text-slate-300 font-bold block">Photo Evidence (Optional)</label>
+            <div className="border-2 border-dashed border-slate-700 hover:border-slate-500 rounded-xl p-3 text-center bg-[#07111E] transition">
+              {imagePreview ? (
+                <div className="relative inline-block">
+                  <img src={imagePreview} alt="Preview" className="h-24 object-cover rounded-lg border border-slate-600" />
                   <button
                     type="button"
                     onClick={() => { setImageFile(null); setImagePreview(null); }}
-                    className="absolute top-1 right-1 bg-rose-600 text-white rounded-full p-0.5 shadow cursor-pointer"
+                    className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full p-1 shadow"
                   >
                     <X className="w-3 h-3" />
                   </button>
                 </div>
+              ) : (
+                <label className="cursor-pointer flex flex-col items-center gap-1 text-slate-400 hover:text-white">
+                  <Camera className="w-5 h-5 text-blue-400" />
+                  <span className="text-[11px]">Upload scene photo (Cloudinary sync)</span>
+                  <input type="file" accept="image/*" onChange={handleImageChange} className="hidden" />
+                </label>
               )}
             </div>
           </div>
 
-          {/* Action Buttons */}
-          <div className="pt-2 flex items-center gap-3">
+          {/* Footer Action Buttons */}
+          <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-800">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 rounded-xl text-xs font-bold text-slate-300 transition cursor-pointer"
+              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl transition cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isUploading}
-              className="flex-1 py-3 bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 rounded-xl text-xs font-black text-white shadow-lg transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              className="px-5 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-bold rounded-xl transition flex items-center gap-2 cursor-pointer shadow-sm"
             >
               {isUploading ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Publishing & Uploading...</span>
+                  <span>Submitting...</span>
                 </>
               ) : (
                 <>
                   <CheckCircle2 className="w-4 h-4" />
-                  <span>Publish Incident →</span>
+                  <span>Broadcast Incident</span>
                 </>
               )}
             </button>
           </div>
 
         </form>
-
       </div>
     </div>
   );

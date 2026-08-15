@@ -22,42 +22,13 @@ export function ResourceShelters() {
     setLoading(true);
     try {
       const data = await governmentApi.getShelters();
-      if (Array.isArray(data) && data.length > 0) {
+      if (Array.isArray(data)) {
         setShelters(data);
       } else {
-        throw new Error('No data');
+        setShelters([]);
       }
     } catch {
-      // Demo state fallback
-      setShelters([
-        {
-          id: 'sh-101',
-          name: 'Sector 4 Indoor Stadium Relief Camp',
-          address: 'Sports Complex, Sector 4, Civil Lines',
-          capacity: 800,
-          occupied: 460,
-          status: 'OPEN',
-          contact_phone: '+91 98765 43210',
-        },
-        {
-          id: 'sh-102',
-          name: 'Govt Model High School Shelter',
-          address: 'Station Road, North Campus',
-          capacity: 400,
-          occupied: 380,
-          status: 'OPEN',
-          contact_phone: '+91 98765 43211',
-        },
-        {
-          id: 'sh-103',
-          name: 'Civil Lines Community Center',
-          address: 'Block B, Ring Road',
-          capacity: 300,
-          occupied: 120,
-          status: 'OPEN',
-          contact_phone: '+91 98765 43212',
-        }
-      ]);
+      setShelters([]);
     } finally {
       setLoading(false);
     }
@@ -74,6 +45,7 @@ export function ResourceShelters() {
           s.id === shelter.id ? { ...s, status: newStatus, is_open: !isCurrentlyOpen } : s
         )
       );
+      window.dispatchEvent(new CustomEvent('vajranet_data_updated'));
     } catch {
       setShelters((prev) =>
         prev.map((s) =>
@@ -92,6 +64,7 @@ export function ResourceShelters() {
       setShelters((prev) =>
         prev.map((s) => (s.id === shelter.id ? { ...s, occupied: clamped } : s))
       );
+      window.dispatchEvent(new CustomEvent('vajranet_data_updated'));
     } catch {
       setShelters((prev) =>
         prev.map((s) => (s.id === shelter.id ? { ...s, occupied: clamped } : s))
@@ -112,18 +85,20 @@ export function ResourceShelters() {
       occupied: 0,
       status: 'OPEN',
       is_private: false,
+      contact_phone: contactPhone || '+91 98765 00000',
     };
 
     try {
       const created = await governmentApi.createShelter(payload);
       setShelters((prev) => [...prev, created]);
+      window.dispatchEvent(new CustomEvent('vajranet_data_updated'));
     } catch {
-      const mockCreated = {
+      const fallbackCreated = {
         ...payload,
         id: `sh-${Date.now()}`,
-        contact_phone: contactPhone || '+91 98765 00000',
       };
-      setShelters((prev) => [...prev, mockCreated]);
+      setShelters((prev) => [...prev, fallbackCreated]);
+      window.dispatchEvent(new CustomEvent('vajranet_data_updated'));
     } finally {
       setShowAddModal(false);
       setName('');
@@ -133,7 +108,7 @@ export function ResourceShelters() {
   }
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 lg:p-6 space-y-6 shadow-xl">
+    <div className="bg-[#0F1E36] border border-slate-800 rounded-2xl p-5 lg:p-6 space-y-6 shadow-xl">
       
       {/* Header Bar */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-800">
@@ -141,7 +116,7 @@ export function ResourceShelters() {
           <h2 className="text-base font-bold text-white flex items-center gap-2">
             <span>🏠 Official Government Disaster Shelters</span>
             <span className="text-[10px] bg-emerald-950 text-emerald-400 border border-emerald-800 px-2 py-0.2 rounded-full font-mono">
-              LIVE NETWORK
+              LIVE NETWORK ({shelters.length})
             </span>
           </h2>
           <p className="text-xs text-slate-400 mt-0.5">
@@ -152,114 +127,99 @@ export function ResourceShelters() {
         <div className="flex items-center gap-2">
           <button
             onClick={fetchShelters}
-            className="p-2 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 text-slate-300 transition"
+            className="p-2 bg-[#07111E] hover:bg-slate-800 text-slate-300 border border-slate-700 rounded-xl transition cursor-pointer"
             title="Refresh Shelters"
           >
-            <RefreshCw className={`w-4 h-4 text-emerald-400 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
           <button
             onClick={() => setShowAddModal(true)}
-            className="bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs px-4 py-2 rounded-xl transition shadow-lg shadow-blue-600/30 flex items-center gap-1.5 cursor-pointer"
+            className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl flex items-center gap-1.5 transition cursor-pointer shadow-sm"
           >
             <Plus className="w-4 h-4" />
-            <span>Add Official Shelter</span>
+            <span>Establish Shelter</span>
           </button>
         </div>
       </div>
 
-      {loading ? (
-        <div className="p-8 text-center text-xs text-slate-400 font-mono animate-pulse">
-          Loading shelter network status...
+      {/* Grid of Shelters */}
+      {shelters.length === 0 && !loading ? (
+        <div className="p-8 text-center bg-[#07111E] border border-slate-800 rounded-xl text-slate-400 text-xs">
+          No registered shelters in database. Click "Establish Shelter" to add one.
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {shelters.map((shelter) => {
-            const sName = shelter.name || 'Emergency Shelter';
-            const sAddress = shelter.address || shelter.location?.address || 'Civil Lines Disaster Zone';
-            const sCap = Number(shelter.capacity || shelter.total_capacity || 100);
-            const sOcc = Number(shelter.occupied || 0);
-            const sAvail = shelter.available_capacity ?? shelter.available ?? Math.max(0, sCap - sOcc);
-            const isOpen = shelter.status === 'OPEN' || shelter.is_open === true || shelter.status === undefined;
-            const occupancyPct = Math.min(100, Math.round((sOcc / (sCap || 1)) * 100));
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {shelters.map((s) => {
+            const cap = s.capacity || s.total_capacity || 100;
+            const occ = s.occupied || 0;
+            const free = Math.max(0, cap - occ);
+            const isOpen = s.status === 'OPEN' || s.is_open === true;
 
             return (
               <div
-                key={shelter.id}
-                className="bg-slate-950 border border-slate-800 hover:border-slate-700 rounded-2xl p-5 space-y-3.5 transition shadow-md"
+                key={s.id}
+                className="bg-[#07111E] border border-slate-800 rounded-xl p-4 flex flex-col justify-between space-y-4 hover:border-slate-700 transition"
               >
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <h3 className="text-sm font-bold text-white">{sName}</h3>
-                    <p className="text-xs text-slate-400 flex items-center gap-1 mt-0.5">
-                      <MapPin className="w-3 h-3 text-slate-500 shrink-0" />
-                      <span>{sAddress}</span>
-                    </p>
+                <div>
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                    <span className={`text-[10px] font-bold font-mono px-2 py-0.5 rounded border ${
+                      isOpen ? 'bg-emerald-950 text-emerald-400 border-emerald-800' : 'bg-red-950 text-red-400 border-red-800'
+                    }`}>
+                      {isOpen ? 'ACTIVE / OPEN' : 'CLOSED / FULL'}
+                    </span>
+                    <button
+                      onClick={() => handleToggleStatus(s)}
+                      className="text-[10px] font-mono text-slate-400 hover:text-white underline cursor-pointer"
+                    >
+                      Toggle Status
+                    </button>
                   </div>
 
-                  <button
-                    onClick={() => handleToggleStatus(shelter)}
-                    className={`text-[10px] font-bold font-mono px-2.5 py-1 rounded-lg border transition cursor-pointer ${
-                      isOpen
-                        ? 'bg-emerald-950 text-emerald-400 border-emerald-700 hover:bg-emerald-900'
-                        : 'bg-rose-950 text-rose-400 border-rose-700 hover:bg-rose-900'
-                    }`}
-                  >
-                    {isOpen ? '🟢 INTAKE OPEN' : '🔴 CLOSED'}
-                  </button>
-                </div>
+                  <h3 className="text-sm font-bold text-white mt-2.5">{s.name}</h3>
+                  <p className="text-xs text-slate-400 font-mono mt-0.5 flex items-center gap-1">
+                    <MapPin className="w-3 h-3 text-slate-500" />
+                    <span>{s.address}</span>
+                  </p>
+                  {s.contact_phone && (
+                    <p className="text-xs text-slate-400 font-mono mt-0.5 flex items-center gap-1">
+                      <Phone className="w-3 h-3 text-slate-500" />
+                      <span>{s.contact_phone}</span>
+                    </p>
+                  )}
 
-                {/* Capacity Progress Bar */}
-                <div className="space-y-1.5 bg-slate-900/90 p-3 rounded-xl border border-slate-800/80">
-                  <div className="flex items-center justify-between text-xs font-mono">
-                    <span className="text-slate-400">Occupancy Gauge</span>
-                    <span className={`font-bold ${occupancyPct > 85 ? 'text-rose-400' : 'text-emerald-400'}`}>
-                      {occupancyPct}%
+                  {/* Occupancy Indicator */}
+                  <div className="mt-4 bg-[#0F1E36] p-3 rounded-lg border border-slate-800 space-y-1.5">
+                    <div className="flex items-center justify-between text-xs font-mono">
+                      <span className="text-slate-400">Capacity:</span>
+                      <span className="text-white font-bold">{occ} / {cap} Occupied</span>
+                    </div>
+                    <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
+                      <div
+                        className={`h-full ${free < 20 ? 'bg-red-500' : 'bg-emerald-500'}`}
+                        style={{ width: `${Math.min(100, (occ / cap) * 100)}%` }}
+                      />
+                    </div>
+                    <span className="text-[10px] text-emerald-400 font-mono block text-right">
+                      {free} Beds Available
                     </span>
                   </div>
-                  
-                  <div className="w-full bg-slate-950 rounded-full h-2 overflow-hidden border border-slate-800">
-                    <div
-                      className={`h-full transition-all duration-300 ${
-                        occupancyPct > 90 ? 'bg-rose-500' : occupancyPct > 70 ? 'bg-amber-500' : 'bg-emerald-500'
-                      }`}
-                      style={{ width: `${occupancyPct}%` }}
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between text-[11px] text-slate-400 font-mono pt-1">
-                    <span>Occupied: <strong className="text-white">{sOcc}</strong></span>
-                    <span>Available: <strong className="text-emerald-400">{sAvail}</strong></span>
-                    <span>Capacity: <strong className="text-slate-200">{sCap}</strong></span>
-                  </div>
                 </div>
 
-                {/* Quick Occupancy Adjuster */}
-                <div className="flex items-center justify-between pt-1 text-xs">
-                  <span className="text-[11px] text-slate-400 font-mono">Live Occupancy Adjuster:</span>
-                  <div className="flex items-center gap-1.5 font-mono">
+                {/* Adjust Occupancy */}
+                <div className="flex items-center justify-between pt-2 border-t border-slate-800 text-xs font-mono">
+                  <span className="text-slate-400">Live Intake:</span>
+                  <div className="flex items-center gap-1.5">
                     <button
-                      onClick={() => handleOccupancyChange(shelter, sOcc - 25)}
-                      className="bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer"
+                      onClick={() => handleOccupancyChange(s, occ - 10)}
+                      className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 rounded text-slate-300 font-bold cursor-pointer"
                     >
-                      -25
+                      -10
                     </button>
                     <button
-                      onClick={() => handleOccupancyChange(shelter, sOcc - 5)}
-                      className="bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer"
+                      onClick={() => handleOccupancyChange(s, occ + 10)}
+                      className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 rounded text-slate-300 font-bold cursor-pointer"
                     >
-                      -5
-                    </button>
-                    <button
-                      onClick={() => handleOccupancyChange(shelter, sOcc + 5)}
-                      className="bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer"
-                    >
-                      +5
-                    </button>
-                    <button
-                      onClick={() => handleOccupancyChange(shelter, sOcc + 25)}
-                      className="bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer"
-                    >
-                      +25
+                      +10
                     </button>
                   </div>
                 </div>
@@ -271,72 +231,65 @@ export function ResourceShelters() {
 
       {/* Add Shelter Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-md w-full space-y-4 shadow-2xl">
-            <h3 className="text-base font-bold text-white">Register Official Disaster Shelter</h3>
-            
-            <form onSubmit={handleCreateShelter} className="space-y-3.5">
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-300">Facility Name</label>
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#0F1E36] border border-slate-700 rounded-2xl p-6 max-w-md w-full text-white space-y-4 shadow-2xl">
+            <h3 className="text-base font-bold">Establish New Disaster Shelter</h3>
+            <form onSubmit={handleCreateShelter} className="space-y-3 font-mono text-xs">
+              <div>
+                <label className="block text-slate-300 mb-1">Shelter Facility Name</label>
                 <input
                   type="text"
-                  required
-                  placeholder="e.g. Municipal Indoor Sports Complex"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500"
+                  placeholder="e.g. Indoor Stadium Relief Camp"
+                  required
+                  className="w-full bg-[#07111E] border border-slate-700 rounded-lg p-2.5 text-white focus:border-blue-500 focus:outline-none"
                 />
               </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-300">Address / Location</label>
+              <div>
+                <label className="block text-slate-300 mb-1">Address / Landmark</label>
                 <input
                   type="text"
-                  required
-                  placeholder="e.g. Sector 4 High Ground, Station Road"
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500"
+                  placeholder="e.g. Sector 4 Sports Complex"
+                  required
+                  className="w-full bg-[#07111E] border border-slate-700 rounded-lg p-2.5 text-white focus:border-blue-500 focus:outline-none"
                 />
               </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-slate-300">Total Bed Capacity</label>
-                  <input
-                    type="number"
-                    required
-                    min={10}
-                    value={capacity}
-                    onChange={(e) => setCapacity(Number(e.target.value))}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-slate-300">Contact Helpline</label>
-                  <input
-                    type="text"
-                    placeholder="+91 98765 43210"
-                    value={contactPhone}
-                    onChange={(e) => setContactPhone(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500"
-                  />
-                </div>
+              <div>
+                <label className="block text-slate-300 mb-1">Total Bed Capacity</label>
+                <input
+                  type="number"
+                  value={capacity}
+                  onChange={(e) => setCapacity(Number(e.target.value))}
+                  required
+                  className="w-full bg-[#07111E] border border-slate-700 rounded-lg p-2.5 text-white focus:border-blue-500 focus:outline-none"
+                />
               </div>
-
-              <div className="flex items-center justify-end gap-2 pt-3">
+              <div>
+                <label className="block text-slate-300 mb-1">Contact Phone</label>
+                <input
+                  type="text"
+                  value={contactPhone}
+                  onChange={(e) => setContactPhone(e.target.value)}
+                  placeholder="+91 98765 43210"
+                  className="w-full bg-[#07111E] border border-slate-700 rounded-lg p-2.5 text-white focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"
                   onClick={() => setShowAddModal(false)}
-                  className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold px-4 py-2 rounded-xl transition cursor-pointer"
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs px-5 py-2 rounded-xl transition shadow-lg shadow-blue-600/30 cursor-pointer"
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg cursor-pointer"
                 >
-                  Register Facility
+                  Register Shelter
                 </button>
               </div>
             </form>
