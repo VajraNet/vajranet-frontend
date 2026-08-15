@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Building2, HeartPulse, Lock, Mail, KeyRound, AlertCircle, Fingerprint } from 'lucide-react';
-import { getOrCreateVajraId } from '../utils/vajraId';
+import { getOrCreateRoleVajraId, getOrCreateVajraId } from '../utils/vajraId';
 
 interface LoginProps {
   onLogin: (userData: { name: string; role: string; token: string; email: string; vajra_id?: string }) => void;
@@ -24,10 +24,10 @@ export function Login({ onLogin }: LoginProps) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    const id = getOrCreateVajraId();
+    const id = getOrCreateRoleVajraId(selectedRole);
     setPersistentVajraId(id);
     setInputVajraId(id);
-  }, []);
+  }, [selectedRole]);
 
   // Government Domain Validator
   const isGovEmail = (emailStr: string): boolean => {
@@ -45,6 +45,10 @@ export function Login({ onLogin }: LoginProps) {
   const handleRoleSwitch = (role: 'GOVERNMENT' | 'VOLUNTEER') => {
     setSelectedRole(role);
     setErrorMessage(null);
+    const id = getOrCreateRoleVajraId(role);
+    setPersistentVajraId(id);
+    setInputVajraId(id);
+
     if (role === 'GOVERNMENT') {
       setEmail('command.ndrf@disaster.gov.in');
     } else {

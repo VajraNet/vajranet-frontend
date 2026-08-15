@@ -46,9 +46,10 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { apiClient } from './api/client';
+import { getOrCreateRoleVajraId } from './utils/vajraId';
 
 export type GovtTab = 'OVERVIEW' | 'SOS' | 'INCIDENTS' | 'ANNOUNCEMENTS' | 'SHELTERS' | 'HOSPITALS' | 'RELIEF' | 'MAP';
-export type VolTab = 'OVERVIEW' | 'SOS' | 'INCIDENTS' | 'TASKS' | 'SHELTERS' | 'HOSPITALS' | 'FUNDRAISERS' | 'OFFLINE_SYNC' | 'PROFILE';
+export type VolTab = 'OVERVIEW' | 'SOS' | 'INCIDENTS' | 'TASKS' | 'SHELTERS' | 'HOSPITALS' | 'FUNDRAISERS' | 'PROFILE';
 
 export default function App() {
   // Theme State: 'dark' | 'light'
@@ -117,8 +118,8 @@ export default function App() {
   const pollLiveCounts = useCallback(async () => {
     try {
       const [sosRes, incRes, taskRes, shelterRes] = await Promise.allSettled([
-        apiClient.get('/sos'),
-        apiClient.get('/incidents'),
+        apiClient.get('/sos?limit=2000'),
+        apiClient.get('/incidents?limit=2000'),
         apiClient.get('/volunteers/tasks'),
         apiClient.get('/shelters')
       ]);
@@ -231,6 +232,7 @@ export default function App() {
 
   const isDark = theme === 'dark';
   const isGovtUser = user.role === 'GOVERNMENT' || user.role === 'ADMIN';
+  const currentVajraId = user.vajra_id || getOrCreateRoleVajraId(isGovtUser ? 'GOVERNMENT' : 'VOLUNTEER');
 
   // Sidebar Menu Items for Government Command
   const govtNavItems: { id: GovtTab; label: string; icon: any; count?: number; badgeColor?: string }[] = [
@@ -253,7 +255,6 @@ export default function App() {
     { id: 'SHELTERS', label: 'Private Shelters', icon: Home, count: liveCounts.sheltersCount || undefined, badgeColor: 'bg-emerald-950 text-emerald-400 border-emerald-800' },
     { id: 'HOSPITALS', label: 'Private Hospitals', icon: HeartPulse },
     { id: 'FUNDRAISERS', label: 'Relief Campaigns', icon: DollarSign },
-    { id: 'OFFLINE_SYNC', label: 'Mesh & Offline Sync', icon: Radio },
     { id: 'PROFILE', label: 'Volunteer Profile', icon: User },
   ];
 
@@ -336,8 +337,8 @@ export default function App() {
           <div className="flex items-center gap-2 pl-2 border-l border-slate-800">
             <div className="hidden sm:block text-right">
               <span className={`font-bold block text-xs ${isDark ? 'text-white' : 'text-slate-900'}`}>{user.name}</span>
-              <span className="text-[10px] text-slate-400 font-mono block">
-                {user.vajra_id ? user.vajra_id.slice(-9) : user.role}
+              <span className="text-[10px] text-cyan-400 font-mono block font-bold">
+                {currentVajraId}
               </span>
             </div>
             <button
@@ -376,6 +377,9 @@ export default function App() {
                   <h2 className="text-xs font-bold text-white font-mono">
                     {isGovtUser ? 'GOVERNMENT EOC' : 'VOLUNTEER SQUAD'}
                   </h2>
+                  <span className="text-[10px] text-cyan-400 font-mono font-bold block">
+                    {currentVajraId}
+                  </span>
                 </div>
               </div>
 
@@ -458,7 +462,6 @@ export default function App() {
               {volTab === 'SHELTERS' && <PrivateShelterManager />}
               {volTab === 'HOSPITALS' && <PrivateHospitalManager />}
               {volTab === 'FUNDRAISERS' && <ReliefFundraisers />}
-              {volTab === 'OFFLINE_SYNC' && <OfflineMeshSync />}
               {volTab === 'PROFILE' && <VolunteerProfile />}
             </div>
           )}

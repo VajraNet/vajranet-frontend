@@ -8,8 +8,6 @@ export type VolTab =
   | 'SHELTERS' 
   | 'HOSPITALS' 
   | 'FUNDRAISERS' 
-  | 'RESOURCE_MAPPING' 
-  | 'OFFLINE_SYNC' 
   | 'PROFILE';
 
 interface VolunteerHeaderProps {
@@ -32,14 +30,12 @@ export function VolunteerHeader({
   const tabs: { id: VolTab; label: string }[] = [
     { id: 'OVERVIEW', label: '📊 Overview' },
     { id: 'SOS', label: '🚨 Live Citizen SOS Calls' },
-    { id: 'TASKS', label: '📋 Assigned Tasks' },
     { id: 'INCIDENTS', label: '⚠️ Field Incidents' },
+    { id: 'TASKS', label: '📋 Assigned Tasks' },
     { id: 'SHELTERS', label: '🏠 Private Shelters' },
     { id: 'HOSPITALS', label: '🏥 Private Hospitals' },
     { id: 'FUNDRAISERS', label: '💰 Relief Campaigns' },
-    { id: 'RESOURCE_MAPPING', label: '🗺️ Community Resource Mapping' },
-    { id: 'OFFLINE_SYNC', label: '📡 Mesh & Offline Sync' },
-    { id: 'PROFILE', label: '👤 Profile & Certs' },
+    { id: 'PROFILE', label: '👤 Volunteer Profile' },
   ];
 
   return (

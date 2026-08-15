@@ -229,8 +229,14 @@ export function IncidentList() {
 
                 {/* Action Controls */}
                 <div className="flex items-center justify-between pt-2 border-t border-slate-800 text-xs font-mono">
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1.5 flex-wrap">
                     <span className="text-slate-400 text-[11px]">Update Status:</span>
+                    <button
+                      onClick={() => handleStatusUpdate(inc.id, 'REPORTED')}
+                      className="px-2.5 py-1 bg-amber-950 hover:bg-amber-900 text-amber-300 border border-amber-800 rounded-lg font-bold cursor-pointer"
+                    >
+                      Reported
+                    </button>
                     <button
                       onClick={() => handleStatusUpdate(inc.id, 'IN_PROGRESS')}
                       className="px-2.5 py-1 bg-blue-950 hover:bg-blue-900 text-blue-300 border border-blue-800 rounded-lg font-bold cursor-pointer"
