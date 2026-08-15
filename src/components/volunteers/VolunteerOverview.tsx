@@ -27,9 +27,9 @@ export function VolunteerOverview({ onNavigateTab }: VolunteerOverviewProps) {
   const fetchCounts = useCallback(async () => {
     try {
       const [incRes, taskRes, sosRes, shelterRes, hospRes] = await Promise.allSettled([
-        apiClient.get('/incidents'),
+        apiClient.get('/incidents?limit=2000'),
         apiClient.get('/volunteers/tasks'),
-        apiClient.get('/sos'),
+        apiClient.get('/sos?limit=2000'),
         apiClient.get('/shelters'),
         apiClient.get('/hospitals')
       ]);

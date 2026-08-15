@@ -3,7 +3,9 @@ import L from 'leaflet';
 import { 
   Compass, 
   Crosshair, 
-  RefreshCw
+  RefreshCw,
+  MapPin,
+  ShieldAlert
 } from 'lucide-react';
 import { apiClient } from '../../api/client';
 import { SOSPayload, Incident, ResourceShelter, ResourceHospital, ResourceReliefCenter } from '../../types/api';
@@ -466,20 +468,20 @@ export function TacticalGISMap({
           </div>
         </div>
 
-        {/* Right Sidebar: Active Entity Telemetry Inspector */}
+        {/* Right Sidebar: Active Live Emergency Feed & Entity Inspector */}
         <div className="bg-[#07111E] border-t lg:border-t-0 lg:border-l border-slate-800 p-4 flex flex-col justify-between overflow-y-auto max-h-[620px]">
           {selectedEntity ? (
             <div className="space-y-4">
               <div className="pb-3 border-b border-slate-800 flex items-center justify-between">
-                <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400">
-                  Inspecting {selectedEntity.type}
-                </span>
                 <button
                   onClick={() => setSelectedEntity(null)}
-                  className="text-xs text-slate-400 hover:text-white"
+                  className="text-xs text-cyan-400 hover:text-cyan-300 font-bold flex items-center gap-1 cursor-pointer font-mono"
                 >
-                  ✕ Close
+                  ← Back to Live Stream
                 </button>
+                <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400">
+                  {selectedEntity.type}
+                </span>
               </div>
 
               <div>
@@ -494,11 +496,11 @@ export function TacticalGISMap({
               <div className="bg-[#0F1E36] p-3 rounded-xl border border-slate-800 space-y-1.5 text-xs font-mono">
                 <div className="flex justify-between">
                   <span className="text-slate-400">Latitude:</span>
-                  <span className="text-white">{selectedEntity.data.latitude?.toFixed(4)}</span>
+                  <span className="text-white">{Number(selectedEntity.data.latitude || 0).toFixed(5)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-400">Longitude:</span>
-                  <span className="text-white">{selectedEntity.data.longitude?.toFixed(4)}</span>
+                  <span className="text-white">{Number(selectedEntity.data.longitude || 0).toFixed(5)}</span>
                 </div>
                 {selectedEntity.data.severity && (
                   <div className="flex justify-between">
@@ -512,11 +514,107 @@ export function TacticalGISMap({
                     <span className="text-emerald-400 font-bold">{selectedEntity.data.status}</span>
                   </div>
                 )}
+                {(selectedEntity.data.user_name || selectedEntity.data.user_phone) && (
+                  <div className="pt-2 border-t border-slate-700/60 space-y-1">
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Citizen:</span>
+                      <span className="text-slate-200">{selectedEntity.data.user_name || 'Citizen'}</span>
+                    </div>
+                    {selectedEntity.data.user_phone && (
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Phone:</span>
+                        <span className="text-emerald-400">{selectedEntity.data.user_phone}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-2 pt-2 border-t border-slate-800">
+                <a
+                  href={`https://maps.google.com/?q=${selectedEntity.data.latitude},${selectedEntity.data.longitude}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full py-2 bg-[#0F1E36] hover:bg-slate-800 border border-cyan-800/60 text-cyan-300 rounded-xl text-xs font-mono font-bold flex items-center justify-center gap-1.5 transition"
+                >
+                  <MapPin className="w-3.5 h-3.5" />
+                  <span>Open in Google Maps</span>
+                </a>
               </div>
             </div>
           ) : (
-            <div className="h-full flex flex-col items-center justify-center text-center p-4 text-slate-400 text-xs">
-              <p>Select any marker on the map to inspect live telemetry & responder actions.</p>
+            <div className="space-y-3">
+              <div className="pb-2 border-b border-slate-800 flex items-center justify-between">
+                <h4 className="text-xs font-bold text-white flex items-center gap-1.5 font-mono">
+                  <ShieldAlert className="w-3.5 h-3.5 text-red-400" />
+                  <span>Live Tactical Stream</span>
+                </h4>
+                <span className="text-[10px] bg-red-950 text-red-400 border border-red-800 px-1.5 py-0.2 rounded font-mono font-bold">
+                  {sosList.length + incidents.length} Signals
+                </span>
+              </div>
+
+              <p className="text-[11px] text-slate-400 font-mono">
+                Click any distress alert below to focus and inspect on map:
+              </p>
+
+              <div className="space-y-2 overflow-y-auto max-h-[500px] pr-1">
+                {/* 1. SOS alerts */}
+                {sosList.slice(0, 20).map((sos) => (
+                  <div
+                    key={sos.id || sos.message_id}
+                    onClick={() => {
+                      setSelectedEntity({ type: 'SOS', data: sos });
+                      if (mapInstanceRef.current && sos.latitude && sos.longitude) {
+                        mapInstanceRef.current.flyTo([sos.latitude, sos.longitude], 15, { duration: 0.8 });
+                      }
+                    }}
+                    className="p-2.5 bg-[#0F1E36] hover:bg-slate-800 border border-slate-800 hover:border-red-600/60 rounded-xl cursor-pointer transition space-y-1.5"
+                  >
+                    <div className="flex items-center justify-between text-[10px] font-mono">
+                      <span className="px-1.5 py-0.2 rounded bg-red-950 text-red-400 border border-red-800 font-bold">
+                        🚨 SOS • {sos.severity || 'CRITICAL'}
+                      </span>
+                      <span className="text-slate-400">{sos.status || 'ACTIVE'}</span>
+                    </div>
+                    <p className="text-xs text-white font-bold line-clamp-2">
+                      {sos.message || 'Emergency distress beacon'}
+                    </p>
+                    <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono pt-1 border-t border-slate-800/60">
+                      <span>GPS: {Number(sos.latitude || 0).toFixed(4)}, {Number(sos.longitude || 0).toFixed(4)}</span>
+                      <span className="text-cyan-400 font-bold">Inspect →</span>
+                    </div>
+                  </div>
+                ))}
+
+                {/* 2. Incidents */}
+                {incidents.slice(0, 10).map((inc) => (
+                  <div
+                    key={inc.id}
+                    onClick={() => {
+                      setSelectedEntity({ type: 'INCIDENT', data: inc });
+                      if (mapInstanceRef.current && inc.latitude && inc.longitude) {
+                        mapInstanceRef.current.flyTo([inc.latitude, inc.longitude], 15, { duration: 0.8 });
+                      }
+                    }}
+                    className="p-2.5 bg-[#0F1E36] hover:bg-slate-800 border border-slate-800 hover:border-amber-600/60 rounded-xl cursor-pointer transition space-y-1.5"
+                  >
+                    <div className="flex items-center justify-between text-[10px] font-mono">
+                      <span className="px-1.5 py-0.2 rounded bg-amber-950 text-amber-400 border border-amber-800 font-bold">
+                        ⚠️ {inc.type || 'HAZARD'}
+                      </span>
+                      <span className="text-slate-400">{inc.status || 'REPORTED'}</span>
+                    </div>
+                    <p className="text-xs text-white font-bold line-clamp-2">
+                      {inc.title || inc.description}
+                    </p>
+                    <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono pt-1 border-t border-slate-800/60">
+                      <span>GPS: {Number(inc.latitude || 0).toFixed(4)}, {Number(inc.longitude || 0).toFixed(4)}</span>
+                      <span className="text-amber-400 font-bold">Inspect →</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>
