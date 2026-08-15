@@ -12,8 +12,18 @@ export function LiveSOSFeed() {
 
   useEffect(() => {
     fetchSOS();
-    const interval = setInterval(fetchSOS, 5000);
-    return () => clearInterval(interval);
+    const interval = setInterval(fetchSOS, 3000);
+
+    const handleUpdate = () => {
+      fetchSOS();
+    };
+
+    window.addEventListener('vajranet_data_updated', handleUpdate);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('vajranet_data_updated', handleUpdate);
+    };
   }, []);
 
   useEffect(() => {

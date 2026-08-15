@@ -39,7 +39,7 @@ export function GovtOverview({ onNavigateTab }: GovtOverviewProps) {
         apiClient.get('/incidents'),
         apiClient.get('/shelters'),
         apiClient.get('/hospitals'),
-        apiClient.get('/volunteers')
+        apiClient.get('/volunteers/tasks')
       ]);
 
       let activeSos = 0;
