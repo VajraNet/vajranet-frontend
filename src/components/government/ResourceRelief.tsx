@@ -35,14 +35,13 @@ export function ResourceRelief() {
 
   async function handleCreateReliefCenter(e: React.FormEvent) {
     e.preventDefault();
-    if (!name.trim() || !address.trim()) return;
-
+    const itemsList = itemsAvailable.split(',').map(s => s.trim()).filter(Boolean);
     const payload: any = {
       name,
       address,
       latitude: 28.6139 + (Math.random() - 0.5) * 0.02,
       longitude: 77.2090 + (Math.random() - 0.5) * 0.02,
-      items_available: itemsAvailable,
+      items_available: itemsList.length > 0 ? itemsList : ['Ration Kits', 'Clean Water', 'First Aid'],
       status: 'OPEN',
       contact_person: contactPerson || 'Relief Officer Incharge',
     };

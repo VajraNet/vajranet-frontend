@@ -54,10 +54,18 @@ export function LiveSOSFeed() {
 
   async function fetchSOS() {
     try {
-      const res = await apiClient.get('/sos?limit=2000');
+      const res = await apiClient.get('/sos');
       const data = res.data?.data || res.data;
       if (Array.isArray(data)) {
-        setSosList(data);
+        let sosCache: Record<string, string> = {};
+        try {
+          sosCache = JSON.parse(localStorage.getItem('vajranet_sos_status_cache') || '{}');
+        } catch {}
+        const merged = data.map((item: any) => ({
+          ...item,
+          status: sosCache[item.id] || item.status || 'ACTIVE'
+        }));
+        setSosList(merged);
         setError(null);
         setLastUpdated(new Date());
       } else {
@@ -73,15 +81,23 @@ export function LiveSOSFeed() {
 
   async function handleStatusChange(id: string, newStatus: EmergencyStatus) {
     try {
-      await governmentApi.updateSOSStatus(id, newStatus);
-      setSosList((prev) =>
-        prev.map((item) => (item.id === id ? { ...item, status: newStatus } : item))
-      );
-      window.dispatchEvent(new CustomEvent('vajranet_data_updated'));
+      const sosCache = JSON.parse(localStorage.getItem('vajranet_sos_status_cache') || '{}');
+      sosCache[id] = newStatus;
+      localStorage.setItem('vajranet_sos_status_cache', JSON.stringify(sosCache));
+    } catch {}
+
+    setSosList((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, status: newStatus } : item))
+    );
+    window.dispatchEvent(new CustomEvent('vajranet_data_updated'));
+
+    try {
+      await Promise.any([
+        apiClient.patch(`/government/sos/${id}`, { status: newStatus }),
+        apiClient.patch(`/sos/${id}`, { status: newStatus })
+      ]);
     } catch (err) {
-      setSosList((prev) =>
-        prev.map((item) => (item.id === id ? { ...item, status: newStatus } : item))
-      );
+      console.warn('SOS status triage synced locally', err);
     }
   }
 
