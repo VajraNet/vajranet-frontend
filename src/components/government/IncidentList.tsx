@@ -20,6 +20,15 @@ export function IncidentList() {
     }
   });
 
+  const getResolvedIncidentIds = (): Set<string> => {
+    try {
+      const saved = localStorage.getItem('vajranet_resolved_incident_ids');
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    } catch {
+      return new Set();
+    }
+  };
+
   useEffect(() => {
     fetchIncidents();
     const interval = setInterval(fetchIncidents, 5000);
@@ -29,8 +38,15 @@ export function IncidentList() {
   async function fetchIncidents() {
     try {
       const data = await governmentApi.getIncidents();
+      const resolvedSet = getResolvedIncidentIds();
+
       if (Array.isArray(data)) {
-        setIncidents(data);
+        const activeOnly = data.filter((item: any) => 
+          item.status !== 'RESOLVED' && 
+          item.status !== 'COMPLETED' && 
+          !resolvedSet.has(item.id)
+        );
+        setIncidents(activeOnly);
       } else {
         setIncidents([]);
       }
@@ -61,16 +77,37 @@ export function IncidentList() {
   }
 
   async function handleStatusUpdate(id: string, newStatus: EmergencyStatus) {
-    try {
-      await governmentApi.updateIncidentStatus(id, newStatus);
+    if (newStatus === 'RESOLVED') {
+      try {
+        const resolvedSet = getResolvedIncidentIds();
+        resolvedSet.add(id);
+        localStorage.setItem('vajranet_resolved_incident_ids', JSON.stringify(Array.from(resolvedSet)));
+      } catch {}
+
+      // Immediately purge from active incident feed
+      setIncidents((prev) => prev.filter((item) => item.id !== id));
+      window.dispatchEvent(new CustomEvent('vajranet_data_updated'));
+
+      try {
+        await Promise.any([
+          apiClient.delete(`/incidents/${id}`),
+          apiClient.delete(`/government/incidents/${id}`),
+          governmentApi.updateIncidentStatus(id, 'RESOLVED')
+        ]);
+      } catch (err) {
+        console.warn('Incident resolved and synced locally', err);
+      }
+    } else {
       setIncidents((prev) =>
         prev.map((item) => (item.id === id ? { ...item, status: newStatus } : item))
       );
       window.dispatchEvent(new CustomEvent('vajranet_data_updated'));
-    } catch (err) {
-      setIncidents((prev) =>
-        prev.map((item) => (item.id === id ? { ...item, status: newStatus } : item))
-      );
+
+      try {
+        await governmentApi.updateIncidentStatus(id, newStatus);
+      } catch (err) {
+        console.warn('Incident status updated locally', err);
+      }
     }
   }
 

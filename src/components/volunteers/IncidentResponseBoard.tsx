@@ -47,12 +47,23 @@ export function IncidentResponseBoard() {
       if (incRes.status === 'fulfilled') {
         const data = incRes.value.data?.data || incRes.value.data;
         if (Array.isArray(data)) {
-          data.forEach((inc: any) => {
+          let resolvedSet = new Set<string>();
+          try {
+            resolvedSet = new Set(JSON.parse(localStorage.getItem('vajranet_resolved_incident_ids') || '[]'));
+          } catch {}
+
+          const activeOnly = data.filter((inc: any) => 
+            inc.status !== 'RESOLVED' && 
+            inc.status !== 'COMPLETED' && 
+            !resolvedSet.has(inc.id)
+          );
+
+          activeOnly.forEach((inc: any) => {
             if (inc.status === 'ACCEPTED' || inc.status === 'IN_PROGRESS') {
               persistentSet.add(inc.id);
             }
           });
-          setIncidents(data);
+          setIncidents(activeOnly);
         }
       }
 
