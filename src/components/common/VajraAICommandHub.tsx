@@ -17,6 +17,7 @@ import {
   FileText
 } from 'lucide-react';
 import { apiClient } from '../../api/client';
+import { getOrCreateRoleVajraId } from '../../utils/vajraId';
 
 interface Message {
   id: string;
@@ -138,6 +139,7 @@ export function VajraAICommandHub({ role, onNavigateToTab }: VajraAICommandHubPr
         body: JSON.stringify({
           message: textToSend,
           conversation_id: conversationId,
+          user_id: getOrCreateRoleVajraId(isGovt ? 'GOVERNMENT' : 'VOLUNTEER'),
           latitude: 26.8467,
           longitude: 80.9462
         })
