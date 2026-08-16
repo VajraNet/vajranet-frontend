@@ -124,7 +124,7 @@ export function ReliefFundraisers() {
         }
       ];
 
-      const merged = [...localUserCamps, ...defaults].map(c => ({
+      const merged = [...localUserCamps, ...defaults].map((c: any) => ({
         ...c,
         raised_amount: raisedMap[c.id] ?? Number(c.raised_amount ?? c.raisedAmount ?? 0),
         raisedAmount: raisedMap[c.id] ?? Number(c.raised_amount ?? c.raisedAmount ?? 0),

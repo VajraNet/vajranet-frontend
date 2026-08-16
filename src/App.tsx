@@ -4,6 +4,7 @@ import { DownloadAppPage } from './components/DownloadAppPage';
 
 // Common / Shared Components
 import { TacticalGISMap } from './components/common/TacticalGISMap';
+import { VajraAICommandHub } from './components/common/VajraAICommandHub';
 
 // Government Components
 import { GovtOverview } from './components/government/GovtOverview';
@@ -468,47 +469,18 @@ export default function App() {
 
           {/* ===================== VAJRA AI INTELLIGENCE ===================== */}
           {portalMode === 'VAJRA_AI' && (
-            <div className="bg-white text-slate-900 border border-slate-800 rounded-2xl h-[85vh] flex flex-col justify-between shadow-xl overflow-hidden">
-              
-              {/* VajraAI Top Control Bar */}
-              <div className="bg-[#0F1E36] text-white px-5 py-3.5 border-b border-slate-800 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-purple-950 border border-purple-800 flex items-center justify-center text-purple-300">
-                    <Bot className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <h2 className="text-sm font-bold text-white flex items-center gap-2">
-                      <span>VajraAI Emergency Intelligence Engine</span>
-                      <span className="text-[10px] bg-purple-900 text-purple-200 border border-purple-700 px-2 py-0.2 rounded-full font-mono font-bold">
-                        🟢 LIVE
-                      </span>
-                    </h2>
-                    <p className="text-slate-400 text-xs font-mono mt-0.5">
-                      Connected Live Cloud AI Assistant for Automated Incident Triage & Evacuation Guidance
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => window.open('https://vajranetai.vercel.app', '_blank')}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-1.5 rounded-lg font-mono text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <span>Open Fullscreen</span>
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Embedded Live VajraAI App */}
-              <div className="flex-1 w-full bg-slate-900 relative">
-                <iframe
-                  src="https://vajranetai.vercel.app"
-                  title="VajraAI Emergency Intelligence"
-                  className="w-full h-full border-none"
-                />
-              </div>
-            </div>
+            <VajraAICommandHub 
+              role={user.role} 
+              onNavigateToTab={(tab) => {
+                if (isGovtUser) {
+                  setPortalMode('GOVERNMENT');
+                  setGovtTab(tab as GovtTab);
+                } else {
+                  setPortalMode('VOLUNTEER');
+                  setVolTab(tab as VolTab);
+                }
+              }} 
+            />
           )}
 
         </main>

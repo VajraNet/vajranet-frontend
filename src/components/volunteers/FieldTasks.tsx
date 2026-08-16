@@ -59,7 +59,7 @@ export function FieldTasks() {
       const overrides = getStatusOverrides();
       setTasks((prev) => {
         if (prev.length > 0) {
-          return prev.map(t => ({ ...t, status: overrides[t.id] || t.status }));
+          return prev.map(t => ({ ...t, status: (overrides[t.id] || t.status) as any }));
         }
         return [
           { id: "TASK-401", title: "Distribute Clean Water Packets", description: "Sector 4 Relief Shelter distribution", zone: "Sector 4", priority: "HIGH", status: (overrides["TASK-401"] || "PENDING") as any },
