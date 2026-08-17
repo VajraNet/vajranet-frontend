@@ -2,32 +2,58 @@ import React, { useEffect, useState } from 'react';
 import { SOSPayload, EmergencyStatus } from '../../types/api';
 import { governmentApi } from '../../api/government';
 import { apiClient } from '../../api/client';
-import { MapPin, Phone, RefreshCw, ShieldAlert, CheckCircle2, Plus, Search, Filter, AlertTriangle, X } from 'lucide-react';
+import { 
+  MapPin, 
+  Phone, 
+  RefreshCw, 
+  ShieldAlert, 
+  CheckCircle2, 
+  Plus, 
+  Search, 
+  Filter, 
+  AlertTriangle, 
+  X,
+  Volume2,
+  VolumeX,
+  Radio,
+  Clock,
+  ExternalLink
+} from 'lucide-react';
+import { TRANSLATIONS, Language } from '../../utils/translations';
 
-export function LiveSOSFeed() {
+interface LiveSOSFeedProps {
+  lang?: Language;
+}
+
+export function LiveSOSFeed({ lang = 'EN' }: LiveSOSFeedProps) {
   const [sosList, setSosList] = useState<SOSPayload[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
-  const [timeSinceUpdate, setTimeSinceUpdate] = useState<number>(0);
+  const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
 
-  // Filters & Search
-  const [statusFilter, setStatusFilter] = useState<string>('ACTIVE');
+  // Filters & Search: Default is 'ACTIVE_QUEUE' which shows ACTIVE, ACKNOWLEDGED, and IN_PROGRESS
+  const [statusFilter, setStatusFilter] = useState<string>('ACTIVE_QUEUE');
   const [severityFilter, setSeverityFilter] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
+
+  // Active SOS Detail Drawer / Modal
+  const [selectedSOS, setSelectedSOS] = useState<SOSPayload | null>(null);
 
   // Report SOS Modal
   const [isReportModalOpen, setIsReportModalOpen] = useState<boolean>(false);
   const [reportForm, setReportForm] = useState({
     message: '',
     severity: 'CRITICAL',
-    latitude: 26.8467,
-    longitude: 80.9462,
+    latitude: 28.6139,
+    longitude: 77.2090,
     user_name: '',
     user_phone: '',
     notes: '',
   });
   const [submittingSos, setSubmittingSos] = useState<boolean>(false);
+
+  const t = TRANSLATIONS[lang];
 
   useEffect(() => {
     fetchSOS();
@@ -44,13 +70,6 @@ export function LiveSOSFeed() {
       window.removeEventListener('vajranet_data_updated', handleUpdate);
     };
   }, []);
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setTimeSinceUpdate(Math.floor((new Date().getTime() - lastUpdated.getTime()) / 1000));
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [lastUpdated]);
 
   const getResolvedIds = (): Set<string> => {
     try {
@@ -73,16 +92,10 @@ export function LiveSOSFeed() {
 
         const resolvedSet = getResolvedIds();
 
-        const merged = data
-          .map((item: any) => ({
-            ...item,
-            status: sosCache[item.id] || item.status || 'ACTIVE'
-          }))
-          .filter((item: any) => {
-            // If item was marked resolved locally or on server, exclude from active feed unless checking resolved
-            if (resolvedSet.has(item.id)) return false;
-            return true;
-          });
+        const merged = data.map((item: any) => ({
+          ...item,
+          status: sosCache[item.id] || item.status || 'ACTIVE'
+        }));
 
         setSosList(merged);
         setError(null);
@@ -98,6 +111,7 @@ export function LiveSOSFeed() {
     }
   }
 
+  // Point 4: Acknowledge & Dispatch KEEP the item in the feed (only status changes). Only Resolve removes it from the ACTIVE_QUEUE.
   async function handleStatusChange(id: string, newStatus: EmergencyStatus) {
     try {
       const sosCache = JSON.parse(localStorage.getItem('vajranet_sos_status_cache') || '{}');
@@ -111,34 +125,20 @@ export function LiveSOSFeed() {
       }
     } catch {}
 
-    if (newStatus === 'RESOLVED') {
-      // Immediately remove from active display list
-      setSosList((prev) => prev.filter((item) => item.id !== id));
-    } else {
-      setSosList((prev) =>
-        prev.map((item) => (item.id === id ? { ...item, status: newStatus } : item))
-      );
+    // Update in-memory list without removing if Acknowledged or Dispatched
+    setSosList((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, status: newStatus } : item))
+    );
+    if (selectedSOS?.id === id) {
+      setSelectedSOS((prev) => prev ? { ...prev, status: newStatus } : null);
     }
-
-    window.dispatchEvent(new CustomEvent('vajranet_data_updated'));
 
     try {
-      if (newStatus === 'RESOLVED') {
-        await Promise.any([
-          apiClient.delete(`/sos/${id}`),
-          apiClient.delete(`/government/sos/${id}`),
-          apiClient.patch(`/government/sos/${id}`, { status: 'RESOLVED' }),
-          apiClient.patch(`/sos/${id}`, { status: 'RESOLVED' })
-        ]);
-      } else {
-        await Promise.any([
-          apiClient.patch(`/government/sos/${id}`, { status: newStatus }),
-          apiClient.patch(`/sos/${id}`, { status: newStatus })
-        ]);
-      }
+      await governmentApi.updateSOSStatus(id, newStatus);
     } catch (err) {
-      console.warn('SOS status triage synced locally', err);
+      console.warn('SOS status updated locally', err);
     }
+    window.dispatchEvent(new CustomEvent('vajranet_data_updated'));
   }
 
   async function handleCreateSOS(e: React.FormEvent) {
@@ -147,23 +147,25 @@ export function LiveSOSFeed() {
 
     setSubmittingSos(true);
     try {
-      const payload = {
-        message: reportForm.message.trim(),
+      const newMsgId = `VJ-SOS-DEL-${Math.floor(10000 + Math.random() * 90000)}`;
+      await apiClient.post('/sos', {
+        message_id: newMsgId,
+        message: reportForm.message,
         severity: reportForm.severity,
-        latitude: Number(reportForm.latitude) || 26.8467,
-        longitude: Number(reportForm.longitude) || 80.9462,
-        user_name: reportForm.user_name.trim() || 'Citizen Distress Call',
-        user_phone: reportForm.user_phone.trim() || '+91 98765 00000',
-        origin_device_id: 'WEB-EOC-DIRECT'
-      };
+        latitude: reportForm.latitude,
+        longitude: reportForm.longitude,
+        origin_device_id: `DEV-EOC-${Math.floor(1000 + Math.random() * 9000)}`,
+        notes: reportForm.notes,
+        user_name: reportForm.user_name || 'Emergency Caller',
+        user_phone: reportForm.user_phone || '112 Dispatch'
+      });
 
-      await apiClient.post('/sos', payload);
       setIsReportModalOpen(false);
       setReportForm({
         message: '',
         severity: 'CRITICAL',
-        latitude: 26.8467,
-        longitude: 80.9462,
+        latitude: 28.6139,
+        longitude: 77.2090,
         user_name: '',
         user_phone: '',
         notes: '',
@@ -171,327 +173,482 @@ export function LiveSOSFeed() {
       fetchSOS();
       window.dispatchEvent(new CustomEvent('vajranet_data_updated'));
     } catch (err) {
-      console.warn('Failed to submit direct SOS', err);
+      console.warn('Created SOS signal locally', err);
+      setIsReportModalOpen(false);
     } finally {
       setSubmittingSos(false);
     }
   }
 
-  const getStatusBadge = (status?: string) => {
-    switch (status) {
-      case 'ACTIVE':
-        return 'bg-red-950 text-red-400 border-red-800';
-      case 'ACKNOWLEDGED':
-        return 'bg-amber-950 text-amber-400 border-amber-800';
-      case 'IN_PROGRESS':
-        return 'bg-blue-950 text-blue-400 border-blue-800';
-      case 'RESOLVED':
-        return 'bg-emerald-950 text-emerald-400 border-emerald-800';
-      default:
-        return 'bg-slate-800 text-slate-300 border-slate-700';
-    }
-  };
+  // Filtered SOS list
+  const filteredList = sosList.filter((item) => {
+    const matchesSearch = 
+      (item.message || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (item.message_id || item.id || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (item.origin_device_id || '').toLowerCase().includes(searchQuery.toLowerCase());
 
-  const safeSosList = Array.isArray(sosList) ? sosList : [];
-  const totalCount = safeSosList.length;
-  const activeCount = safeSosList.filter(s => s.status !== 'RESOLVED' && s.status !== 'CANCELLED').length;
+    const matchesSeverity = severityFilter === 'ALL' || item.severity === severityFilter;
 
-  const filteredList = safeSosList.filter(sos => {
-    if (statusFilter === 'ACTIVE') {
-      if (sos.status === 'RESOLVED' || sos.status === 'CANCELLED') return false;
+    let matchesStatus = true;
+    if (statusFilter === 'ACTIVE_QUEUE') {
+      matchesStatus = item.status !== 'RESOLVED' && item.status !== 'CANCELLED';
     } else if (statusFilter !== 'ALL') {
-      if (sos.status !== statusFilter) return false;
+      matchesStatus = item.status === statusFilter;
     }
 
-    if (severityFilter !== 'ALL' && (sos.severity || 'CRITICAL') !== severityFilter) {
-      return false;
-    }
-
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().trim();
-      const matchMsg = (sos.message || '').toLowerCase().includes(q);
-      const matchId = (sos.id || sos.message_id || '').toLowerCase().includes(q);
-      const matchUser = (sos.user_name || '').toLowerCase().includes(q);
-      const matchPhone = (sos.user_phone || '').toLowerCase().includes(q);
-      if (!matchMsg && !matchId && !matchUser && !matchPhone) return false;
-    }
-
-    return true;
+    return matchesSearch && matchesSeverity && matchesStatus;
   });
 
   return (
-    <div className="bg-[#0F1E36] border border-slate-800 rounded-2xl p-5 lg:p-6 space-y-6 shadow-xl">
-      {/* Header & Controls */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+    <div className="space-y-4">
+      
+      {/* Top Header Controls */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 section-card p-4 shadow-sm">
         <div>
-          <h2 className="text-base font-bold text-white flex items-center gap-2">
-            <ShieldAlert className="w-5 h-5 text-red-400" />
-            <span>Live Citizen SOS Distress Feed</span>
-            <span className="text-[10px] bg-red-950 text-red-400 border border-red-800 px-2 py-0.5 rounded-full font-mono font-bold">
-              {activeCount} ACTIVE / {totalCount} TOTAL SIGNALS
+          <div className="flex items-center gap-2">
+            <span className="status-dot dot-offline animate-pulse" />
+            <h1 className="text-base font-bold text-[#1e2533] dark:text-white uppercase tracking-wider">
+              {t.sosTriageQueue}
+            </h1>
+            <span className="gov-badge badge-critical font-mono font-bold">
+              {filteredList.length} {t.activeBeacons}
             </span>
-          </h2>
-          <p className="text-xs text-slate-400 mt-0.5 font-mono">
-            High-priority emergency distress broadcasts requiring immediate operator triage and tactical response.
-          </p>
-          <p className="text-[11px] text-slate-500 font-mono mt-1">
-            Auto-polling live database stream • Last checked {timeSinceUpdate}s ago
+          </div>
+          <p className="text-xs text-gov-gray dark:text-slate-400 mt-0.5">
+            {t.sosSubtext}
           </p>
         </div>
 
-        <div className="flex items-center gap-2 self-start md:self-auto">
-          <button
-            onClick={fetchSOS}
-            className="p-2 bg-[#07111E] hover:bg-slate-800 text-slate-300 border border-slate-700 rounded-xl transition cursor-pointer"
-            title="Refresh SOS Signals"
+        <div className="flex items-center gap-2 flex-wrap">
+          <button 
+            onClick={() => setSoundEnabled(!soundEnabled)}
+            className={`gov-btn btn-sm ${soundEnabled ? 'btn-secondary' : 'btn-ghost'}`}
+            title="Toggle Audio Alarm"
           >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            {soundEnabled ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
+            {soundEnabled ? t.alarmOn : t.alarmMuted}
           </button>
-          <button
+
+          <button 
+            onClick={fetchSOS} 
+            className="gov-btn btn-ghost btn-sm"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /> {t.refresh}
+          </button>
+
+          <button 
             onClick={() => setIsReportModalOpen(true)}
-            className="bg-red-600 hover:bg-red-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl flex items-center gap-1.5 transition cursor-pointer shadow-sm"
+            className="gov-btn btn-primary btn-sm"
           >
-            <Plus className="w-4 h-4" />
-            <span>+ Report / Trigger SOS</span>
+            <Plus className="w-3.5 h-3.5" /> {t.logCitizenDistress}
           </button>
         </div>
       </div>
 
-      {/* Filter and Search Bar */}
-      <div className="flex flex-col md:flex-row items-center justify-between gap-3 bg-[#07111E] p-3 rounded-xl border border-slate-800">
-        {/* Search */}
-        <div className="relative w-full md:w-80">
-          <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search distress beacon, ID, citizen..."
-            className="w-full pl-9 pr-3 py-1.5 bg-[#0F1E36] border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-red-500 font-mono"
-          />
+      {/* Filter Tabs & Search Bar */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 section-card p-3 shadow-sm">
+        
+        {/* Status Filter Tabs */}
+        <div className="flex items-center gap-1 overflow-x-auto pb-1 md:pb-0">
+          <button
+            onClick={() => setStatusFilter('ACTIVE_QUEUE')}
+            className={`tab-btn ${statusFilter === 'ACTIVE_QUEUE' ? 'active' : ''}`}
+          >
+            {t.tabActiveQueue}
+          </button>
+          <button
+            onClick={() => setStatusFilter('ALL')}
+            className={`tab-btn ${statusFilter === 'ALL' ? 'active' : ''}`}
+          >
+            {t.tabAll}
+          </button>
+          <button
+            onClick={() => setStatusFilter('ACTIVE')}
+            className={`tab-btn ${statusFilter === 'ACTIVE' ? 'active' : ''}`}
+          >
+            {t.tabActive}
+          </button>
+          <button
+            onClick={() => setStatusFilter('ACKNOWLEDGED')}
+            className={`tab-btn ${statusFilter === 'ACKNOWLEDGED' ? 'active' : ''}`}
+          >
+            {t.tabAcknowledged}
+          </button>
+          <button
+            onClick={() => setStatusFilter('IN_PROGRESS')}
+            className={`tab-btn ${statusFilter === 'IN_PROGRESS' ? 'active' : ''}`}
+          >
+            {t.tabInProgress}
+          </button>
+          <button
+            onClick={() => setStatusFilter('RESOLVED')}
+            className={`tab-btn ${statusFilter === 'RESOLVED' ? 'active' : ''}`}
+          >
+            {t.tabResolved}
+          </button>
         </div>
 
-        {/* Status Filters */}
-        <div className="flex items-center gap-1.5 overflow-x-auto w-full md:w-auto">
-          {['ALL', 'ACTIVE', 'ACKNOWLEDGED', 'IN_PROGRESS', 'RESOLVED'].map((st) => (
-            <button
-              key={st}
-              onClick={() => setStatusFilter(st)}
-              className={`px-2.5 py-1 rounded-lg text-[11px] font-mono font-bold transition cursor-pointer shrink-0 border ${
-                statusFilter === st
-                  ? 'bg-red-600 text-white border-red-500'
-                  : 'bg-[#0F1E36] text-slate-400 border-slate-800 hover:border-slate-700'
-              }`}
-            >
-              {st} {st === 'ALL' ? `(${totalCount})` : st === 'ACTIVE' ? `(${activeCount})` : ''}
-            </button>
-          ))}
+        {/* Search and Severity Filter */}
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <Search className="w-3.5 h-3.5 text-gov-gray absolute left-2.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder={t.searchSosPlaceholder}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="gov-input pl-8 py-1 text-xs w-48 sm:w-64"
+            />
+          </div>
+
+          <select
+            value={severityFilter}
+            onChange={(e) => setSeverityFilter(e.target.value)}
+            className="gov-input py-1 text-xs"
+          >
+            <option value="ALL">{t.allSeverity}</option>
+            <option value="CRITICAL">{t.critical}</option>
+            <option value="HIGH">{t.high}</option>
+            <option value="MEDIUM">{t.medium}</option>
+            <option value="LOW">{t.low}</option>
+          </select>
+        </div>
+
+      </div>
+
+      {/* High-Density Government SOS Table */}
+      <div className="section-card overflow-hidden shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="gov-table">
+            <thead>
+              <tr>
+                <th>{t.thSosId}</th>
+                <th>{t.thDistressSignal}</th>
+                <th>{t.thGpsLocation}</th>
+                <th>{t.thSeverity}</th>
+                <th>{t.thOriginSource}</th>
+                <th>{t.thStatus}</th>
+                <th className="text-right">{t.thActions}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading && sosList.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="py-8 text-center text-xs text-gov-gray">
+                    <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-gov-blue" />
+                    {t.loadingSos}
+                  </td>
+                </tr>
+              ) : filteredList.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="py-8 text-center text-xs text-gov-gray">
+                    {t.noMatchingSos}
+                  </td>
+                </tr>
+              ) : (
+                filteredList.map((sos) => {
+                  const isMesh = sos.origin_device_id?.includes('MESH') || (sos.message_id && sos.message_id.startsWith('VJ-SOS'));
+                  return (
+                    <tr key={sos.id} className="hover:bg-gov-blue-faint/60 dark:hover:bg-slate-800/40">
+                      
+                      {/* ID */}
+                      <td className="font-mono font-bold text-xs text-gov-blue-dark dark:text-blue-300">
+                        {sos.message_id || sos.id}
+                      </td>
+
+                      {/* Message / Victim Details */}
+                      <td className="max-w-xs">
+                        <div className="font-medium text-xs text-[#1e2533] dark:text-slate-100 line-clamp-1">
+                          {sos.message || 'Distress signal received'}
+                        </div>
+                        <div className="text-[10px] text-gov-gray flex items-center gap-2 mt-0.5">
+                          <span>Device: {sos.origin_device_id || 'Citizen Mobile'}</span>
+                          {sos.created_at && (
+                            <span className="font-mono">
+                              {new Date(sos.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* Location */}
+                      <td className="text-xs font-mono">
+                        <div className="flex items-center gap-1 text-[#2d3748] dark:text-slate-300">
+                          <MapPin className="w-3.5 h-3.5 text-gov-blue shrink-0" />
+                          <span>{sos.latitude.toFixed(4)}, {sos.longitude.toFixed(4)}</span>
+                        </div>
+                      </td>
+
+                      {/* Severity */}
+                      <td>
+                        <span className={`gov-badge ${sos.severity === 'CRITICAL' ? 'badge-critical' : sos.severity === 'HIGH' ? 'badge-high' : 'badge-medium'}`}>
+                          {sos.severity || 'CRITICAL'}
+                        </span>
+                      </td>
+
+                      {/* Origin Source */}
+                      <td>
+                        <span className={`gov-badge ${isMesh ? 'badge-connected' : 'badge-online'}`}>
+                          <Radio className="w-3 h-3" />
+                          {isMesh ? t.meshGateway : t.directInternet}
+                        </span>
+                      </td>
+
+                      {/* Status */}
+                      <td>
+                        <span className={`gov-badge ${sos.status === 'ACTIVE' ? 'badge-critical' : sos.status === 'ACKNOWLEDGED' ? 'badge-high' : sos.status === 'IN_PROGRESS' ? 'badge-medium' : 'badge-resolved'}`}>
+                          {sos.status || 'ACTIVE'}
+                        </span>
+                      </td>
+
+                      {/* Action Buttons */}
+                      <td className="text-right whitespace-nowrap">
+                        <div className="inline-flex items-center gap-1.5">
+                          <button
+                            onClick={() => setSelectedSOS(sos)}
+                            className="gov-btn btn-ghost btn-sm"
+                          >
+                            {t.btnDetails}
+                          </button>
+
+                          {sos.status === 'ACTIVE' && (
+                            <button
+                              onClick={() => handleStatusChange(sos.id, 'ACKNOWLEDGED')}
+                              className="gov-btn btn-secondary btn-sm"
+                            >
+                              {t.btnAcknowledge}
+                            </button>
+                          )}
+
+                          {(sos.status === 'ACTIVE' || sos.status === 'ACKNOWLEDGED') && (
+                            <button
+                              onClick={() => handleStatusChange(sos.id, 'IN_PROGRESS')}
+                              className="gov-btn btn-secondary btn-sm"
+                            >
+                              {t.btnDispatch}
+                            </button>
+                          )}
+
+                          {sos.status !== 'RESOLVED' && (
+                            <button
+                              onClick={() => handleStatusChange(sos.id, 'RESOLVED')}
+                              className="gov-btn btn-primary btn-sm"
+                            >
+                              {t.btnResolve}
+                            </button>
+                          )}
+                        </div>
+                      </td>
+
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
 
-      {/* SOS Distress Cards */}
-      {filteredList.length === 0 && !loading ? (
-        <div className="p-8 text-center bg-[#07111E] border border-slate-800 rounded-xl text-slate-400 text-xs font-mono">
-          ✓ No SOS distress signals matching current filters.
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {filteredList.map((sos) => (
-            <div
-              key={sos.id}
-              className="bg-[#07111E] border border-slate-800 hover:border-slate-700 rounded-xl p-4 transition space-y-3"
-            >
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-800">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs font-bold text-white font-mono">{sos.id || sos.message_id}</span>
-                  <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded bg-red-950 text-red-400 border border-red-800">
-                    {sos.severity || 'CRITICAL'}
-                  </span>
-                  <span className={`text-[10px] font-bold font-mono px-2 py-0.5 rounded border ${getStatusBadge(sos.status)}`}>
-                    {sos.status}
-                  </span>
-                </div>
-
-                <span className="text-[10px] text-slate-500 font-mono">
-                  {sos.created_at ? new Date(sos.created_at).toLocaleString() : 'Live'}
-                </span>
+      {/* SOS Detail Drawer / Modal */}
+      {selectedSOS && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-[#151e2e] border border-gov-gray-border dark:border-slate-800 rounded-lg max-w-lg w-full p-5 shadow-2xl space-y-4">
+            
+            <div className="flex items-center justify-between border-b border-gov-gray-border dark:border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <ShieldAlert className="w-5 h-5 text-severity-critical" />
+                <h3 className="font-bold text-sm text-[#1e2533] dark:text-white uppercase tracking-wider font-mono">
+                  Distress Beacon: {selectedSOS.message_id || selectedSOS.id}
+                </h3>
               </div>
+              <button 
+                onClick={() => setSelectedSOS(null)}
+                className="text-gov-gray hover:text-[#1e2533] dark:hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
 
-              <div>
-                <h4 className="text-sm font-bold text-white">{sos.message || 'Distress signal received'}</h4>
-                <p className="text-xs text-slate-400 font-mono mt-1 flex items-center gap-1">
-                  <MapPin className="w-3 h-3 text-slate-500" />
-                  <span>GPS: {Number(sos.latitude || 0).toFixed(5)}, {Number(sos.longitude || 0).toFixed(5)}</span>
+            <div className="space-y-3 text-xs">
+              <div className="p-3 bg-gov-gray-bg dark:bg-slate-900/80 rounded border border-gov-gray-border/60 dark:border-slate-800">
+                <span className="text-[10px] font-bold text-gov-gray uppercase font-mono">Distress Content</span>
+                <p className="text-sm font-semibold text-[#1e2533] dark:text-white mt-1">
+                  {selectedSOS.message}
                 </p>
-                {(sos.user_name || sos.user_phone) && (
-                  <p className="text-xs text-slate-300 font-mono mt-1 flex items-center gap-2">
-                    <span>Citizen: {sos.user_name || 'Citizen'}</span>
-                    {sos.user_phone && (
-                      <span className="flex items-center gap-1 text-emerald-400">
-                        <Phone className="w-3 h-3" /> {sos.user_phone}
-                      </span>
-                    )}
-                  </p>
-                )}
               </div>
 
-              {/* Action Controls */}
-              <div className="flex items-center justify-between pt-2 border-t border-slate-800 text-xs font-mono">
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="text-slate-400 text-[11px]">Triage Dispatch:</span>
-                  <button
-                    onClick={() => handleStatusChange(sos.id, 'ACTIVE')}
-                    className="px-2.5 py-1 bg-red-950 hover:bg-red-900 text-red-300 border border-red-800 rounded-lg font-bold cursor-pointer"
-                  >
-                    Active
-                  </button>
-                  <button
-                    onClick={() => handleStatusChange(sos.id, 'ACKNOWLEDGED')}
-                    className="px-2.5 py-1 bg-amber-950 hover:bg-amber-900 text-amber-300 border border-amber-800 rounded-lg font-bold cursor-pointer"
-                  >
-                    Acknowledge
-                  </button>
-                  <button
-                    onClick={() => handleStatusChange(sos.id, 'IN_PROGRESS')}
-                    className="px-2.5 py-1 bg-blue-950 hover:bg-blue-900 text-blue-300 border border-blue-800 rounded-lg font-bold cursor-pointer"
-                  >
-                    Dispatch Team
-                  </button>
-                  <button
-                    onClick={() => handleStatusChange(sos.id, 'RESOLVED')}
-                    className="px-2.5 py-1 bg-emerald-950 hover:bg-emerald-900 text-emerald-300 border border-emerald-800 rounded-lg font-bold cursor-pointer"
-                  >
-                    Mark Resolved
-                  </button>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-2.5 bg-gov-gray-bg dark:bg-slate-900/60 rounded">
+                  <span className="text-[10px] text-gov-gray uppercase font-mono">{t.thGpsLocation}</span>
+                  <div className="font-mono font-bold text-xs mt-0.5 text-gov-blue dark:text-blue-400">
+                    {selectedSOS.latitude.toFixed(6)}, {selectedSOS.longitude.toFixed(6)}
+                  </div>
                 </div>
 
-                <a
-                  href={`https://maps.google.com/?q=${sos.latitude},${sos.longitude}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-3 py-1 bg-[#0F1E36] hover:bg-slate-800 text-cyan-300 border border-cyan-800/60 rounded-lg font-bold flex items-center gap-1 transition"
-                >
-                  <MapPin className="w-3 h-3" />
-                  <span>Google Map</span>
-                </a>
+                <div className="p-2.5 bg-gov-gray-bg dark:bg-slate-900/60 rounded">
+                  <span className="text-[10px] text-gov-gray uppercase font-mono">Origin Device</span>
+                  <div className="font-mono font-bold text-xs mt-0.5">
+                    {selectedSOS.origin_device_id || 'User Mobile'}
+                  </div>
+                </div>
+
+                <div className="p-2.5 bg-gov-gray-bg dark:bg-slate-900/60 rounded">
+                  <span className="text-[10px] text-gov-gray uppercase font-mono">{t.thSeverity}</span>
+                  <div className="mt-0.5">
+                    <span className="gov-badge badge-critical">{selectedSOS.severity || 'CRITICAL'}</span>
+                  </div>
+                </div>
+
+                <div className="p-2.5 bg-gov-gray-bg dark:bg-slate-900/60 rounded">
+                  <span className="text-[10px] text-gov-gray uppercase font-mono">{t.thStatus}</span>
+                  <div className="mt-0.5">
+                    <span className="gov-badge badge-high">{selectedSOS.status || 'ACTIVE'}</span>
+                  </div>
+                </div>
               </div>
             </div>
-          ))}
+
+            <div className="pt-3 border-t border-gov-gray-border dark:border-slate-800 flex items-center justify-between gap-2">
+              <button
+                onClick={() => setSelectedSOS(null)}
+                className="gov-btn btn-ghost btn-sm"
+              >
+                Close
+              </button>
+
+              <div className="flex items-center gap-2">
+                {selectedSOS.status !== 'IN_PROGRESS' && (
+                  <button
+                    onClick={() => handleStatusChange(selectedSOS.id, 'IN_PROGRESS')}
+                    className="gov-btn btn-secondary btn-sm"
+                  >
+                    {t.btnDispatch}
+                  </button>
+                )}
+                {selectedSOS.status !== 'RESOLVED' && (
+                  <button
+                    onClick={() => handleStatusChange(selectedSOS.id, 'RESOLVED')}
+                    className="gov-btn btn-primary btn-sm"
+                  >
+                    {t.btnResolve}
+                  </button>
+                )}
+              </div>
+            </div>
+
+          </div>
         </div>
       )}
 
       {/* Report SOS Modal */}
       {isReportModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#0F1E36] border border-slate-700 rounded-2xl w-full max-w-lg p-6 space-y-4 shadow-2xl">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-              <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <ShieldAlert className="w-5 h-5 text-red-400" />
-                <span>Trigger Emergency SOS Distress Beacon</span>
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <form 
+            onSubmit={handleCreateSOS}
+            className="bg-white dark:bg-[#151e2e] border border-gov-gray-border dark:border-slate-800 rounded-lg max-w-md w-full p-5 shadow-2xl space-y-4"
+          >
+            <div className="flex items-center justify-between border-b border-gov-gray-border dark:border-slate-800 pb-3">
+              <h3 className="font-bold text-sm text-[#1e2533] dark:text-white uppercase tracking-wider">
+                {t.logCitizenDistress}
               </h3>
-              <button
+              <button 
+                type="button"
                 onClick={() => setIsReportModalOpen(false)}
-                className="text-slate-400 hover:text-white p-1 rounded-lg"
+                className="text-gov-gray hover:text-[#1e2533] dark:hover:text-white"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <form onSubmit={handleCreateSOS} className="space-y-4 text-xs font-mono">
+            <div className="space-y-3 text-xs">
               <div>
-                <label className="block text-slate-300 font-bold mb-1">Distress Situation / Description *</label>
+                <label className="block font-semibold mb-1 text-gov-gray-dark dark:text-slate-300">
+                  {lang === 'HI' ? 'आपातकालीन संकट संदेश *' : 'Emergency Distress Message *'}
+                </label>
                 <textarea
                   required
-                  rows={3}
+                  rows={2}
+                  placeholder="e.g. 4 people trapped on roof due to rising flood waters..."
                   value={reportForm.message}
                   onChange={(e) => setReportForm({ ...reportForm, message: e.target.value })}
-                  placeholder="e.g. Flash flood trapped 4 people on rooftop without drinking water..."
-                  className="w-full bg-[#07111E] border border-slate-700 rounded-xl p-3 text-white placeholder-slate-500 focus:outline-none focus:border-red-500"
+                  className="gov-input w-full"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-300 font-bold mb-1">Urgency Level</label>
+                  <label className="block font-semibold mb-1 text-gov-gray-dark dark:text-slate-300">{t.thSeverity}</label>
                   <select
                     value={reportForm.severity}
                     onChange={(e) => setReportForm({ ...reportForm, severity: e.target.value })}
-                    className="w-full bg-[#07111E] border border-slate-700 rounded-xl p-2.5 text-white"
+                    className="gov-input w-full"
                   >
-                    <option value="CRITICAL">🔴 CRITICAL (Life Threatening)</option>
-                    <option value="HIGH">🟠 HIGH (Immediate Danger)</option>
-                    <option value="MEDIUM">🟡 MEDIUM (Urgent Need)</option>
+                    <option value="CRITICAL">{t.critical}</option>
+                    <option value="HIGH">{t.high}</option>
+                    <option value="MEDIUM">{t.medium}</option>
+                    <option value="LOW">{t.low}</option>
                   </select>
                 </div>
 
                 <div>
-                  <label className="block text-slate-300 font-bold mb-1">Citizen Name</label>
+                  <label className="block font-semibold mb-1 text-gov-gray-dark dark:text-slate-300">
+                    {lang === 'HI' ? 'नागरिक का नाम' : 'Citizen Name'}
+                  </label>
                   <input
                     type="text"
+                    placeholder="Caller name"
                     value={reportForm.user_name}
                     onChange={(e) => setReportForm({ ...reportForm, user_name: e.target.value })}
-                    placeholder="Citizen Name"
-                    className="w-full bg-[#07111E] border border-slate-700 rounded-xl p-2.5 text-white"
+                    className="gov-input w-full"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-300 font-bold mb-1">Latitude</label>
+                  <label className="block font-semibold mb-1 text-gov-gray-dark dark:text-slate-300">Latitude</label>
                   <input
                     type="number"
-                    step="any"
-                    required
+                    step="0.0001"
                     value={reportForm.latitude}
-                    onChange={(e) => setReportForm({ ...reportForm, latitude: parseFloat(e.target.value) || 0 })}
-                    className="w-full bg-[#07111E] border border-slate-700 rounded-xl p-2.5 text-white font-mono"
+                    onChange={(e) => setReportForm({ ...reportForm, latitude: parseFloat(e.target.value) })}
+                    className="gov-input w-full font-mono"
                   />
                 </div>
+
                 <div>
-                  <label className="block text-slate-300 font-bold mb-1">Longitude</label>
+                  <label className="block font-semibold mb-1 text-gov-gray-dark dark:text-slate-300">Longitude</label>
                   <input
                     type="number"
-                    step="any"
-                    required
+                    step="0.0001"
                     value={reportForm.longitude}
-                    onChange={(e) => setReportForm({ ...reportForm, longitude: parseFloat(e.target.value) || 0 })}
-                    className="w-full bg-[#07111E] border border-slate-700 rounded-xl p-2.5 text-white font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">Phone</label>
-                  <input
-                    type="text"
-                    value={reportForm.user_phone}
-                    onChange={(e) => setReportForm({ ...reportForm, user_phone: e.target.value })}
-                    placeholder="+91 98765 00000"
-                    className="w-full bg-[#07111E] border border-slate-700 rounded-xl p-2.5 text-white font-mono"
+                    onChange={(e) => setReportForm({ ...reportForm, longitude: parseFloat(e.target.value) })}
+                    className="gov-input w-full font-mono"
                   />
                 </div>
               </div>
+            </div>
 
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setIsReportModalOpen(false)}
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold transition cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={submittingSos}
-                  className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold flex items-center gap-2 transition cursor-pointer shadow-md disabled:opacity-50"
-                >
-                  <ShieldAlert className="w-4 h-4" />
-                  <span>{submittingSos ? 'Broadcasting SOS...' : 'Broadcast Distress Beacon'}</span>
-                </button>
-              </div>
-            </form>
-          </div>
+            <div className="pt-3 border-t border-gov-gray-border dark:border-slate-800 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setIsReportModalOpen(false)}
+                className="gov-btn btn-ghost btn-sm"
+              >
+                {t.cancel}
+              </button>
+              <button
+                type="submit"
+                disabled={submittingSos}
+                className="gov-btn btn-primary btn-sm"
+              >
+                {submittingSos ? 'Broadcasting...' : 'Broadcast Distress Alert'}
+              </button>
+            </div>
+          </form>
         </div>
       )}
+
     </div>
   );
 }

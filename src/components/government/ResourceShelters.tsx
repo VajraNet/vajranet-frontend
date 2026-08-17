@@ -1,9 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { Home, Plus, CheckCircle2, XCircle, Users, Phone, MapPin, RefreshCw } from 'lucide-react';
-import { ResourceShelter } from '../../types/api';
+import { Home, Plus, CheckCircle2, XCircle, Users, Phone, MapPin, RefreshCw, X, Building2, Trash2 } from 'lucide-react';
 import { governmentApi } from '../../api/government';
+import { TRANSLATIONS, Language } from '../../utils/translations';
 
-export function ResourceShelters() {
+interface ResourceSheltersProps {
+  lang?: Language;
+}
+
+export function ResourceShelters({ lang = 'EN' }: ResourceSheltersProps) {
   const [shelters, setShelters] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
@@ -13,6 +17,8 @@ export function ResourceShelters() {
   const [address, setAddress] = useState('');
   const [capacity, setCapacity] = useState<number>(200);
   const [contactPhone, setContactPhone] = useState('');
+
+  const t = TRANSLATIONS[lang];
 
   useEffect(() => {
     fetchShelters();
@@ -32,6 +38,16 @@ export function ResourceShelters() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleDelete(id: string) {
+    try {
+      await governmentApi.deleteShelter(id);
+    } catch (e) {
+      console.warn('Deleted locally:', e);
+    }
+    setShelters((prev) => prev.filter((s) => s.id !== id));
+    window.dispatchEvent(new CustomEvent('vajranet_data_updated'));
   }
 
   async function handleToggleStatus(shelter: any) {
@@ -98,202 +114,273 @@ export function ResourceShelters() {
         id: `sh-${Date.now()}`,
       };
       setShelters((prev) => [...prev, fallbackCreated]);
-      window.dispatchEvent(new CustomEvent('vajranet_data_updated'));
-    } finally {
-      setShowAddModal(false);
-      setName('');
-      setAddress('');
-      setContactPhone('');
     }
+
+    setName('');
+    setAddress('');
+    setCapacity(200);
+    setContactPhone('');
+    setShowAddModal(false);
   }
 
+  const totalCap = shelters.reduce((acc, s) => acc + Number(s.capacity || s.total_capacity || 0), 0);
+  const totalOcc = shelters.reduce((acc, s) => acc + Number(s.occupied || 0), 0);
+
   return (
-    <div className="bg-[#0F1E36] border border-slate-800 rounded-2xl p-5 lg:p-6 space-y-6 shadow-xl">
+    <div className="space-y-4">
       
-      {/* Header Bar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 section-card p-4 shadow-sm">
         <div>
-          <h2 className="text-base font-bold text-white flex items-center gap-2">
-            <span>🏠 Official Government Disaster Shelters</span>
-            <span className="text-[10px] bg-emerald-950 text-emerald-400 border border-emerald-800 px-2 py-0.2 rounded-full font-mono">
-              LIVE NETWORK ({shelters.length})
+          <div className="flex items-center gap-2">
+            <Building2 className="w-5 h-5 text-gov-blue dark:text-blue-400" />
+            <h1 className="text-base font-bold text-[#1e2533] dark:text-white uppercase tracking-wider">
+              {t.sheltersTitle}
+            </h1>
+            <span className="gov-badge badge-medium font-mono font-bold">
+              {shelters.length} {t.registered}
             </span>
-          </h2>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Real-time shelter capacity allocation, occupancy updates, and operational intake status.
+          </div>
+          <p className="text-xs text-gov-gray dark:text-slate-400 mt-0.5">
+            {t.sheltersSubtext}: <strong className="text-gov-blue dark:text-blue-400">{totalCap}</strong> · {t.occupied}: <strong className="text-status-online">{totalOcc}</strong>
           </p>
         </div>
 
         <div className="flex items-center gap-2">
-          <button
-            onClick={fetchShelters}
-            className="p-2 bg-[#07111E] hover:bg-slate-800 text-slate-300 border border-slate-700 rounded-xl transition cursor-pointer"
-            title="Refresh Shelters"
+          <button 
+            onClick={fetchShelters} 
+            className="gov-btn btn-ghost btn-sm"
           >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /> {t.refresh}
           </button>
           <button
             onClick={() => setShowAddModal(true)}
-            className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl flex items-center gap-1.5 transition cursor-pointer shadow-sm"
+            className="gov-btn btn-primary btn-sm"
           >
-            <Plus className="w-4 h-4" />
-            <span>Establish Shelter</span>
+            <Plus className="w-3.5 h-3.5" /> {t.addShelter}
           </button>
         </div>
       </div>
 
-      {/* Grid of Shelters */}
-      {shelters.length === 0 && !loading ? (
-        <div className="p-8 text-center bg-[#07111E] border border-slate-800 rounded-xl text-slate-400 text-xs">
-          No registered shelters in database. Click "Establish Shelter" to add one.
+      {/* Shelters Table */}
+      <div className="section-card overflow-hidden shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="gov-table">
+            <thead>
+              <tr>
+                <th>{t.thShelterNameLocation}</th>
+                <th>{t.thOccupancyCapacity}</th>
+                <th>{t.thUtilizationMeter}</th>
+                <th>{t.thStatus}</th>
+                <th>{t.thOperator}</th>
+                <th>{t.thManageQuota}</th>
+                <th className="text-right">{t.thActions}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading && shelters.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="py-8 text-center text-xs text-gov-gray">
+                    <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-gov-blue" />
+                    Loading shelter inventory...
+                  </td>
+                </tr>
+              ) : shelters.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="py-8 text-center text-xs text-gov-gray">
+                    No emergency shelters registered yet.
+                  </td>
+                </tr>
+              ) : (
+                shelters.map((shelter) => {
+                  const cap = shelter.capacity || shelter.total_capacity || 100;
+                  const occ = shelter.occupied || 0;
+                  const pct = cap > 0 ? Math.round((occ / cap) * 100) : 0;
+                  const isOpen = shelter.status === 'OPEN' || shelter.is_open === true;
+
+                  return (
+                    <tr key={shelter.id} className="hover:bg-gov-blue-faint/60 dark:hover:bg-slate-800/40">
+                      
+                      {/* Name & Address */}
+                      <td>
+                        <div className="font-semibold text-xs text-[#1e2533] dark:text-white">
+                          {shelter.name}
+                        </div>
+                        <div className="text-[10px] text-gov-gray flex items-center gap-1 mt-0.5">
+                          <MapPin className="w-3 h-3 text-gov-blue shrink-0" />
+                          <span>{shelter.address}</span>
+                        </div>
+                      </td>
+
+                      {/* Numbers */}
+                      <td className="font-mono text-xs">
+                        <span className="font-bold text-[#1e2533] dark:text-white">{occ}</span>
+                        <span className="text-gov-gray"> / {cap}</span>
+                        <span className="text-[10px] text-gov-gray ml-1.5 font-bold">({pct}%)</span>
+                      </td>
+
+                      {/* Progress Meter */}
+                      <td className="w-36">
+                        <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-300 ${
+                              pct >= 90 ? 'bg-severity-critical' : pct >= 70 ? 'bg-severity-high' : 'bg-status-online'
+                            }`}
+                            style={{ width: `${Math.min(pct, 100)}%` }}
+                          />
+                        </div>
+                      </td>
+
+                      {/* Status */}
+                      <td>
+                        <button
+                          onClick={() => handleToggleStatus(shelter)}
+                          className={`gov-badge cursor-pointer ${isOpen ? 'badge-online' : 'badge-offline'}`}
+                        >
+                          {isOpen ? t.operational : t.closed}
+                        </button>
+                      </td>
+
+                      {/* Operator */}
+                      <td>
+                        <span className={`gov-badge ${shelter.is_private ? 'badge-medium' : 'badge-resolved'}`}>
+                          {shelter.is_private ? t.volunteer : t.government}
+                        </span>
+                      </td>
+
+                      {/* Quota adjustments */}
+                      <td className="whitespace-nowrap">
+                        <div className="inline-flex items-center gap-1">
+                          <button
+                            onClick={() => handleOccupancyChange(shelter, occ - 10)}
+                            className="gov-btn btn-ghost btn-sm px-2 py-0.5 text-xs font-bold"
+                            title="Decrease Occupancy (-10)"
+                          >
+                            -10
+                          </button>
+                          <button
+                            onClick={() => handleOccupancyChange(shelter, occ + 10)}
+                            className="gov-btn btn-secondary btn-sm px-2 py-0.5 text-xs font-bold"
+                            title="Increase Occupancy (+10)"
+                          >
+                            +10
+                          </button>
+                        </div>
+                      </td>
+
+                      {/* Delete action */}
+                      <td className="text-right whitespace-nowrap">
+                        <button
+                          onClick={() => handleDelete(shelter.id)}
+                          className="text-gov-gray hover:text-severity-critical p-1 transition cursor-pointer"
+                          title="Delete Shelter"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
+
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
         </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {shelters.map((s) => {
-            const cap = s.capacity || s.total_capacity || 100;
-            const occ = s.occupied || 0;
-            const free = Math.max(0, cap - occ);
-            const isOpen = s.status === 'OPEN' || s.is_open === true;
-
-            return (
-              <div
-                key={s.id}
-                className="bg-[#07111E] border border-slate-800 rounded-xl p-4 flex flex-col justify-between space-y-4 hover:border-slate-700 transition"
-              >
-                <div>
-                  <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-                    <span className={`text-[10px] font-bold font-mono px-2 py-0.5 rounded border ${
-                      isOpen ? 'bg-emerald-950 text-emerald-400 border-emerald-800' : 'bg-red-950 text-red-400 border-red-800'
-                    }`}>
-                      {isOpen ? 'ACTIVE / OPEN' : 'CLOSED / FULL'}
-                    </span>
-                    <button
-                      onClick={() => handleToggleStatus(s)}
-                      className="text-[10px] font-mono text-slate-400 hover:text-white underline cursor-pointer"
-                    >
-                      Toggle Status
-                    </button>
-                  </div>
-
-                  <h3 className="text-sm font-bold text-white mt-2.5">{s.name}</h3>
-                  <p className="text-xs text-slate-400 font-mono mt-0.5 flex items-center gap-1">
-                    <MapPin className="w-3 h-3 text-slate-500" />
-                    <span>{s.address}</span>
-                  </p>
-                  {s.contact_phone && (
-                    <p className="text-xs text-slate-400 font-mono mt-0.5 flex items-center gap-1">
-                      <Phone className="w-3 h-3 text-slate-500" />
-                      <span>{s.contact_phone}</span>
-                    </p>
-                  )}
-
-                  {/* Occupancy Indicator */}
-                  <div className="mt-4 bg-[#0F1E36] p-3 rounded-lg border border-slate-800 space-y-1.5">
-                    <div className="flex items-center justify-between text-xs font-mono">
-                      <span className="text-slate-400">Capacity:</span>
-                      <span className="text-white font-bold">{occ} / {cap} Occupied</span>
-                    </div>
-                    <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
-                      <div
-                        className={`h-full ${free < 20 ? 'bg-red-500' : 'bg-emerald-500'}`}
-                        style={{ width: `${Math.min(100, (occ / cap) * 100)}%` }}
-                      />
-                    </div>
-                    <span className="text-[10px] text-emerald-400 font-mono block text-right">
-                      {free} Beds Available
-                    </span>
-                  </div>
-                </div>
-
-                {/* Adjust Occupancy */}
-                <div className="flex items-center justify-between pt-2 border-t border-slate-800 text-xs font-mono">
-                  <span className="text-slate-400">Live Intake:</span>
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      onClick={() => handleOccupancyChange(s, occ - 10)}
-                      className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 rounded text-slate-300 font-bold cursor-pointer"
-                    >
-                      -10
-                    </button>
-                    <button
-                      onClick={() => handleOccupancyChange(s, occ + 10)}
-                      className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 rounded text-slate-300 font-bold cursor-pointer"
-                    >
-                      +10
-                    </button>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+      </div>
 
       {/* Add Shelter Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#0F1E36] border border-slate-700 rounded-2xl p-6 max-w-md w-full text-white space-y-4 shadow-2xl">
-            <h3 className="text-base font-bold">Establish New Disaster Shelter</h3>
-            <form onSubmit={handleCreateShelter} className="space-y-3 font-mono text-xs">
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <form 
+            onSubmit={handleCreateShelter}
+            className="bg-white dark:bg-[#151e2e] border border-gov-gray-border dark:border-slate-800 rounded-lg max-w-md w-full p-5 shadow-2xl space-y-4"
+          >
+            <div className="flex items-center justify-between border-b border-gov-gray-border dark:border-slate-800 pb-3">
+              <h3 className="font-bold text-sm text-[#1e2533] dark:text-white uppercase tracking-wider">
+                {t.addShelter}
+              </h3>
+              <button 
+                type="button"
+                onClick={() => setShowAddModal(false)}
+                className="text-gov-gray hover:text-[#1e2533] dark:hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
               <div>
-                <label className="block text-slate-300 mb-1">Shelter Facility Name</label>
+                <label className="block font-semibold mb-1 text-gov-gray-dark dark:text-slate-300">
+                  {lang === 'HI' ? 'आश्रय स्थल का नाम *' : 'Shelter Facility Name *'}
+                </label>
                 <input
                   type="text"
+                  required
+                  placeholder="e.g. Government Inter College Auditorium"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g. Indoor Stadium Relief Camp"
-                  required
-                  className="w-full bg-[#07111E] border border-slate-700 rounded-lg p-2.5 text-white focus:border-blue-500 focus:outline-none"
+                  className="gov-input w-full"
                 />
               </div>
+
               <div>
-                <label className="block text-slate-300 mb-1">Address / Landmark</label>
+                <label className="block font-semibold mb-1 text-gov-gray-dark dark:text-slate-300">
+                  {lang === 'HI' ? 'स्थान व पता *' : 'Address / Location *'}
+                </label>
                 <input
                   type="text"
+                  required
+                  placeholder="e.g. Civil Lines, Near District Court"
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}
-                  placeholder="e.g. Sector 4 Sports Complex"
-                  required
-                  className="w-full bg-[#07111E] border border-slate-700 rounded-lg p-2.5 text-white focus:border-blue-500 focus:outline-none"
+                  className="gov-input w-full"
                 />
               </div>
-              <div>
-                <label className="block text-slate-300 mb-1">Total Bed Capacity</label>
-                <input
-                  type="number"
-                  value={capacity}
-                  onChange={(e) => setCapacity(Number(e.target.value))}
-                  required
-                  className="w-full bg-[#07111E] border border-slate-700 rounded-lg p-2.5 text-white focus:border-blue-500 focus:outline-none"
-                />
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold mb-1 text-gov-gray-dark dark:text-slate-300">
+                    {lang === 'HI' ? 'अधिकतम क्षमता' : 'Max Capacity'}
+                  </label>
+                  <input
+                    type="number"
+                    min="10"
+                    value={capacity}
+                    onChange={(e) => setCapacity(Number(e.target.value))}
+                    className="gov-input w-full font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold mb-1 text-gov-gray-dark dark:text-slate-300">
+                    {lang === 'HI' ? 'संपर्क फोन' : 'Contact Phone'}
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="+91 98765 43210"
+                    value={contactPhone}
+                    onChange={(e) => setContactPhone(e.target.value)}
+                    className="gov-input w-full"
+                  />
+                </div>
               </div>
-              <div>
-                <label className="block text-slate-300 mb-1">Contact Phone</label>
-                <input
-                  type="text"
-                  value={contactPhone}
-                  onChange={(e) => setContactPhone(e.target.value)}
-                  placeholder="+91 98765 43210"
-                  className="w-full bg-[#07111E] border border-slate-700 rounded-lg p-2.5 text-white focus:border-blue-500 focus:outline-none"
-                />
-              </div>
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowAddModal(false)}
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg cursor-pointer"
-                >
-                  Register Shelter
-                </button>
-              </div>
-            </form>
-          </div>
+            </div>
+
+            <div className="pt-3 border-t border-gov-gray-border dark:border-slate-800 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowAddModal(false)}
+                className="gov-btn btn-ghost btn-sm"
+              >
+                {t.cancel}
+              </button>
+              <button
+                type="submit"
+                className="gov-btn btn-primary btn-sm"
+              >
+                Save & Publish Shelter
+              </button>
+            </div>
+          </form>
         </div>
       )}
 

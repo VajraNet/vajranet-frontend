@@ -216,6 +216,14 @@ export const governmentApi = {
     await apiClient.delete(`/relief-centers/${id}`);
   },
 
+  deleteShelter: async (id: string): Promise<void> => {
+    await apiClient.delete(`/shelters/${id}`);
+  },
+
+  deleteHospital: async (id: string): Promise<void> => {
+    await apiClient.delete(`/hospitals/${id}`);
+  },
+
   getTrustedDevices: async (): Promise<any[]> => {
     const res = await apiClient.get('/devices/trusted/');
     return ensureArray(res.data);

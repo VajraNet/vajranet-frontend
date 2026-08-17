@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { CheckSquare, CheckCircle2, RefreshCw } from 'lucide-react';
+import { CheckSquare, CheckCircle2, RefreshCw, Clock, MapPin } from 'lucide-react';
 import { apiClient } from '../../api/client';
+import { TRANSLATIONS, Language } from '../../utils/translations';
 
 export interface VolunteerTask {
   id: string;
@@ -13,9 +14,15 @@ export interface VolunteerTask {
   assignedAt?: string;
 }
 
-export function FieldTasks() {
+interface FieldTasksProps {
+  lang?: Language;
+}
+
+export function FieldTasks({ lang = 'EN' }: FieldTasksProps) {
   const [tasks, setTasks] = useState<VolunteerTask[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+
+  const t = TRANSLATIONS[lang];
 
   useEffect(() => {
     fetchTasks();
@@ -55,7 +62,6 @@ export function FieldTasks() {
         setTasks([]);
       }
     } catch {
-      // Keep existing tasks or load fallback with overrides applied
       const overrides = getStatusOverrides();
       setTasks((prev) => {
         if (prev.length > 0) {
@@ -85,114 +91,131 @@ export function FieldTasks() {
     }
   }
 
-  const getPriorityBadge = (p: string) => {
-    switch (p) {
-      case 'CRITICAL':
-        return 'bg-red-950 text-red-400 border-red-800';
-      case 'HIGH':
-        return 'bg-amber-950 text-amber-400 border-amber-800';
-      default:
-        return 'bg-slate-800 text-slate-300 border-slate-700';
-    }
-  };
-
   const activeTasks = tasks.filter(t => (t.status as string) !== 'COMPLETED' && (t.status as string) !== 'RESOLVED' && (t.status as string) !== 'CANCELLED');
 
   return (
-    <div className="bg-[#0F1E36] border border-slate-800 rounded-2xl p-5 lg:p-6 space-y-6 shadow-xl">
+    <div className="space-y-4">
       
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 section-card p-4 shadow-sm">
         <div>
-          <h2 className="text-base font-bold text-white flex items-center gap-2">
-            <CheckSquare className="w-5 h-5 text-emerald-400" />
-            <span>Assigned Field Response Tasks</span>
-            <span className="text-[10px] bg-emerald-950 text-emerald-400 border border-emerald-800 px-2 py-0.2 rounded-full font-mono font-bold">
-              {activeTasks.length} ACTIVE
+          <div className="flex items-center gap-2">
+            <CheckSquare className="w-5 h-5 text-status-online" />
+            <h1 className="text-base font-bold text-[#1e2533] dark:text-white uppercase tracking-wider">
+              {lang === 'HI' ? 'मेरे सौंपे गए फील्ड कार्य' : 'Assigned Field Tasks'}
+            </h1>
+            <span className="gov-badge badge-online font-mono font-bold">
+              {activeTasks.length} {lang === 'HI' ? 'सक्रिय कार्य' : 'ACTIVE TASKS'}
             </span>
-          </h2>
-          <p className="text-xs text-slate-400 mt-0.5 font-mono">
-            Operational tasks assigned by Government EOC dispatchers or claimed by your volunteer squad.
+          </div>
+          <p className="text-xs text-gov-gray dark:text-slate-400 mt-0.5">
+            {lang === 'HI' ? 'नागरिक सहायता, राहत वितरण एवं बचाव कार्य जो आपके दस्ते को सौंपे गए हैं' : 'Community rescue missions, ration supply drives, and medical evacuation tasks claimed by your squad'}
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={fetchTasks}
-            className="p-2 bg-[#07111E] hover:bg-slate-800 text-slate-300 border border-slate-700 rounded-xl transition cursor-pointer"
-            title="Refresh Tasks"
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-          </button>
+        <button 
+          onClick={fetchTasks} 
+          className="gov-btn btn-ghost btn-sm self-start sm:self-auto"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /> {t.refresh}
+        </button>
+      </div>
+
+      {/* Tasks Table */}
+      <div className="section-card overflow-hidden shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="gov-table">
+            <thead>
+              <tr>
+                <th>Task ID</th>
+                <th>Task Assignment</th>
+                <th>Target Zone</th>
+                <th>Priority</th>
+                <th>Current Status</th>
+                <th className="text-right">Action Progress</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading && tasks.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-8 text-center text-xs text-gov-gray">
+                    <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-gov-blue" />
+                    Loading assigned tasks...
+                  </td>
+                </tr>
+              ) : activeTasks.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-8 text-center text-xs text-gov-gray">
+                    No active tasks currently assigned. Check the Incident Board to claim tasks.
+                  </td>
+                </tr>
+              ) : (
+                activeTasks.map((task) => (
+                  <tr key={task.id} className="hover:bg-gov-blue-faint/60 dark:hover:bg-slate-800/40">
+                    
+                    {/* ID */}
+                    <td className="font-mono font-bold text-xs text-gov-blue-dark dark:text-blue-300">
+                      {task.id}
+                    </td>
+
+                    {/* Title & Desc */}
+                    <td>
+                      <div className="font-bold text-xs text-[#1e2533] dark:text-white">
+                        {task.title}
+                      </div>
+                      <p className="text-[11px] text-gov-gray mt-0.5 line-clamp-1">{task.description}</p>
+                    </td>
+
+                    {/* Zone */}
+                    <td className="text-xs font-mono">
+                      <div className="flex items-center gap-1 text-[#2d3748] dark:text-slate-300">
+                        <MapPin className="w-3.5 h-3.5 text-gov-blue shrink-0" />
+                        <span>{task.zone || 'District Zone'}</span>
+                      </div>
+                    </td>
+
+                    {/* Priority */}
+                    <td>
+                      <span className={`gov-badge ${task.priority === 'CRITICAL' ? 'badge-critical' : task.priority === 'HIGH' ? 'badge-high' : 'badge-medium'}`}>
+                        {task.priority || 'NORMAL'}
+                      </span>
+                    </td>
+
+                    {/* Status */}
+                    <td>
+                      <span className={`gov-badge ${task.status === 'IN_PROGRESS' ? 'badge-medium' : task.status === 'ACCEPTED' ? 'badge-high' : 'badge-low'}`}>
+                        {task.status}
+                      </span>
+                    </td>
+
+                    {/* Action buttons */}
+                    <td className="text-right whitespace-nowrap">
+                      <div className="inline-flex items-center gap-1.5">
+                        {task.status !== 'IN_PROGRESS' && (
+                          <button
+                            onClick={() => handleStatusUpdate(task.id, 'IN_PROGRESS')}
+                            className="gov-btn btn-secondary btn-sm"
+                          >
+                            Mark En Route
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleStatusUpdate(task.id, 'COMPLETED')}
+                          className="gov-btn btn-primary btn-sm"
+                        >
+                          Mark Completed
+                        </button>
+                      </div>
+                    </td>
+
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
 
-      {/* Task List */}
-      {tasks.length === 0 && !loading ? (
-        <div className="p-8 text-center bg-[#07111E] border border-slate-800 rounded-xl text-slate-400 text-xs font-mono">
-          ✓ No assigned volunteer tasks in database.
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {tasks.map((task) => {
-            const isCompleted = task.status === 'COMPLETED' || task.status === 'RESOLVED';
-            const hasValidZone = task.zone && task.zone.trim() !== '' && task.zone !== '—' && task.zone !== '-' && task.zone !== 'null';
-
-            return (
-              <div
-                key={task.id}
-                className="bg-[#07111E] border border-slate-800 hover:border-slate-700 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 transition"
-              >
-                <div className="space-y-1.5 flex-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className={`text-[10px] font-bold font-mono px-2 py-0.5 rounded border ${getPriorityBadge(task.priority)}`}>
-                      {task.priority}
-                    </span>
-                    {hasValidZone && (
-                      <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
-                        {task.zone}
-                      </span>
-                    )}
-                    <span className={`text-[10px] font-bold font-mono px-2 py-0.5 rounded border ${
-                      isCompleted ? 'bg-emerald-950 text-emerald-400 border-emerald-800' : 'bg-blue-950 text-blue-400 border-blue-800'
-                    }`}>
-                      {task.status}
-                    </span>
-                  </div>
-
-                  <h3 className="text-sm font-bold text-white">{task.title}</h3>
-                  <p className="text-xs text-slate-400 font-mono">{task.description}</p>
-                </div>
-
-                <div className="flex items-center gap-2 font-mono text-xs shrink-0">
-                  {!isCompleted ? (
-                    <>
-                      <button
-                        onClick={() => handleStatusUpdate(task.id, 'IN_PROGRESS')}
-                        className="px-3 py-1.5 bg-blue-950 hover:bg-blue-900 text-blue-300 border border-blue-800 rounded-lg font-bold cursor-pointer"
-                      >
-                        In Progress
-                      </button>
-                      <button
-                        onClick={() => handleStatusUpdate(task.id, 'COMPLETED')}
-                        className="px-3 py-1.5 bg-emerald-950 hover:bg-emerald-900 text-emerald-300 border border-emerald-800 rounded-lg font-bold cursor-pointer flex items-center gap-1"
-                      >
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        <span>Complete</span>
-                      </button>
-                    </>
-                  ) : (
-                    <span className="text-xs text-emerald-400 font-bold flex items-center gap-1">
-                      <CheckCircle2 className="w-4 h-4" />
-                      <span>Task Completed</span>
-                    </span>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
     </div>
   );
 }

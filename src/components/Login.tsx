@@ -1,387 +1,250 @@
 import React, { useState, useEffect } from 'react';
-import { Building2, HeartPulse, Lock, Mail, KeyRound, AlertCircle, Fingerprint } from 'lucide-react';
-import { getOrCreateRoleVajraId, getOrCreateVajraId } from '../utils/vajraId';
+import { Building2, Users, Lock, Mail, AlertCircle, Sun, Moon } from 'lucide-react';
+import { getOrCreateRoleVajraId } from '../utils/vajraId';
+import { TRANSLATIONS, Language } from '../utils/translations';
 
 interface LoginProps {
   onLogin: (userData: { name: string; role: string; token: string; email: string; vajra_id?: string }) => void;
 }
 
 export function Login({ onLogin }: LoginProps) {
-  const [persistentVajraId, setPersistentVajraId] = useState<string>('');
+  const [lang, setLang] = useState<Language>('EN');
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
 
-  // Role options: 'GOVERNMENT' | 'VOLUNTEER'
+  // Role: 'GOVERNMENT' | 'VOLUNTEER'
   const [selectedRole, setSelectedRole] = useState<'GOVERNMENT' | 'VOLUNTEER'>('GOVERNMENT');
   
-  // Auth Mode: 'PASSWORD' | 'OTP' | 'VAJRA_ID'
-  const [authMode, setAuthMode] = useState<'PASSWORD' | 'OTP' | 'VAJRA_ID'>('PASSWORD');
-  
   // Input fields
-  const [email, setEmail] = useState<string>('command.ndrf@disaster.gov.in');
+  const [email, setEmail] = useState<string>('command.eoc@disaster.gov.in');
   const [password, setPassword] = useState<string>('VajraCommand2026!');
-  const [otp, setOtp] = useState<string>('829104');
-  const [inputVajraId, setInputVajraId] = useState<string>('');
-  const [otpSent, setOtpSent] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [loading, setLoading] = useState<boolean>(false);
+
+  const t = TRANSLATIONS[lang];
 
   useEffect(() => {
-    const id = getOrCreateRoleVajraId(selectedRole);
-    setPersistentVajraId(id);
-    setInputVajraId(id);
-  }, [selectedRole]);
+    try {
+      const savedTheme = (localStorage.getItem('vajranet_frontend_theme') as 'light' | 'dark') || 'light';
+      setTheme(savedTheme);
+      if (savedTheme === 'dark') {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+    } catch {}
+  }, []);
 
-  // Government Domain Validator
-  const isGovEmail = (emailStr: string): boolean => {
-    const clean = emailStr.toLowerCase().trim();
-    return (
-      clean.endsWith('.gov') ||
-      clean.endsWith('.gov.in') ||
-      clean.endsWith('.nic.in') ||
-      clean.endsWith('.mil') ||
-      clean.includes('.gov.') ||
-      clean.includes('@gov.')
-    );
+  const toggleTheme = () => {
+    const next = theme === 'light' ? 'dark' : 'light';
+    setTheme(next);
+    if (next === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    try {
+      localStorage.setItem('vajranet_frontend_theme', next);
+    } catch {}
   };
 
   const handleRoleSwitch = (role: 'GOVERNMENT' | 'VOLUNTEER') => {
     setSelectedRole(role);
     setErrorMessage(null);
-    const id = getOrCreateRoleVajraId(role);
-    setPersistentVajraId(id);
-    setInputVajraId(id);
 
     if (role === 'GOVERNMENT') {
-      setEmail('command.ndrf@disaster.gov.in');
+      setEmail('command.eoc@disaster.gov.in');
+      setPassword('VajraCommand2026!');
     } else {
       setEmail('alex.mercer@redcross.org');
+      setPassword('VolunteerPass2026!');
     }
-  };
-
-  const handleSendOtp = () => {
-    if (!email.trim()) {
-      setErrorMessage('Please enter your email address first.');
-      return;
-    }
-    if (selectedRole === 'GOVERNMENT' && !isGovEmail(email)) {
-      setErrorMessage('Government portal requires an official .gov, .gov.in, or .nic.in email.');
-      return;
-    }
-    setErrorMessage(null);
-    setOtpSent(true);
-    setOtp('829104');
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
+    setLoading(true);
 
-    const finalVajraId = persistentVajraId || getOrCreateVajraId();
-
-    // Vajra ID direct sign in
-    if (authMode === 'VAJRA_ID') {
-      const cleanVajraId = inputVajraId.trim().toUpperCase();
-      if (!cleanVajraId) {
-        setErrorMessage('Please enter your Unique Vajra ID.');
-        return;
-      }
-      const displayName = selectedRole === 'GOVERNMENT'
-        ? `Gov Officer (${cleanVajraId.slice(-9)})`
-        : `Field Volunteer (${cleanVajraId.slice(-9)})`;
+    setTimeout(() => {
+      const vajraId = getOrCreateRoleVajraId(selectedRole === 'VOLUNTEER' ? 'VOLUNTEER' : 'GOVERNMENT');
       
-      const token = selectedRole === 'GOVERNMENT' ? 'mock-government-token' : 'mock-volunteer-token';
-      const emailGenerated = `${cleanVajraId.toLowerCase()}@vajranet.local`;
+      let token = 'mock-citizen-token';
+      let name = 'Disaster Management User';
 
-      const userData = {
-        name: displayName,
+      if (selectedRole === 'GOVERNMENT') {
+        token = 'mock-government-token';
+        name = 'Rajiv Srivastava (District Collector)';
+      } else {
+        token = 'mock-volunteer-token';
+        name = 'Alex Mercer (Field Squad Lead)';
+      }
+
+      onLogin({
+        name,
         role: selectedRole,
         token,
-        email: emailGenerated,
-        vajra_id: cleanVajraId
-      };
-
-      onLogin(userData);
-      return;
-    }
-
-    const cleanEmail = email.trim();
-
-    // 1. Validate Government Email
-    if (selectedRole === 'GOVERNMENT') {
-      if (!isGovEmail(cleanEmail)) {
-        setErrorMessage('Access Denied: Government Command requires an official government email (e.g. ending in .gov, .gov.in, or .nic.in).');
-        return;
-      }
-    }
-
-    // 2. Validate General Email format
-    if (!cleanEmail.includes('@') || !cleanEmail.includes('.')) {
-      setErrorMessage('Please provide a valid email address.');
-      return;
-    }
-
-    // 3. Validate Auth Inputs
-    if (authMode === 'PASSWORD' && !password.trim()) {
-      setErrorMessage('Please enter your password.');
-      return;
-    }
-
-    if (authMode === 'OTP' && otp.trim().length < 4) {
-      setErrorMessage('Please enter the 6-digit verification OTP.');
-      return;
-    }
-
-    const displayName = selectedRole === 'GOVERNMENT' 
-      ? `Officer Sharma (NDRF HQ)` 
-      : `Alex Mercer (${cleanEmail.split('@')[0]})`;
-
-    const token = selectedRole === 'GOVERNMENT' ? 'mock-government-token' : 'mock-volunteer-token';
-
-    const userData = {
-      name: displayName,
-      role: selectedRole,
-      token,
-      email: cleanEmail,
-      vajra_id: finalVajraId
-    };
-
-    onLogin(userData);
+        email,
+        vajra_id: vajraId
+      });
+      setLoading(false);
+    }, 400);
   };
 
   return (
-    <div className="min-h-screen bg-[#0B192C] flex flex-col justify-center items-center p-4 font-sans select-none relative">
+    <div className="min-h-screen bg-[#f5f6f8] dark:bg-[#0d1522] text-[#1e2533] dark:text-[#f1f5f9] flex flex-col font-sans transition-colors duration-150">
       
-      <div className="max-w-md w-full space-y-5 relative z-10">
-        
-        {/* Brand Logo & Portal Header */}
-        <div className="text-center space-y-3">
-          <div className="inline-flex items-center justify-center p-2 rounded-2xl bg-white border border-slate-700 shadow-md">
+      {/* Top Government Header */}
+      <header style={{ background: '#1a4480', borderBottom: '1px solid #112e5a' }} className="px-4 py-3 flex items-center justify-between shadow-sm shrink-0">
+        <div className="flex items-center gap-3">
+          <div style={{ width: 32, height: 32, background: '#e8f0fa', borderRadius: 3, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <img 
-              src="/vajranet-logo.jpg" 
-              alt="VajraNet Logo" 
-              className="h-12 w-auto object-contain rounded" 
+              src="/vajranet-icon.jpg" 
+              alt="Emblem" 
+              className="w-6 h-6 object-contain rounded-xs"
             />
           </div>
-
           <div>
-            <h1 className="text-xl font-black text-white tracking-wider uppercase">VAJRANET COMMAND</h1>
-            <p className="text-xs text-slate-300 font-mono font-medium mt-0.5">
-              National Disaster Emergency Response & Communication Platform
-            </p>
+            <div style={{ color: '#fff', fontSize: 15, fontWeight: 700, letterSpacing: '0.04em', lineHeight: 1.2 }}>VAJRANET</div>
+            <div style={{ color: 'rgba(255,255,255,0.75)', fontSize: 10, letterSpacing: '0.04em' }}>
+              {t.portalTitleGovt}
+            </div>
           </div>
         </div>
 
-        {/* Crisp Card with Role Tabs */}
-        <div className="bg-[#0F1E36] rounded-2xl border border-slate-800 p-6 space-y-5 shadow-xl text-slate-100">
+        <div className="flex items-center gap-2">
+          {/* Language Switcher */}
+          <div className="flex items-center gap-0.5" style={{ borderRight: '1px solid rgba(255,255,255,0.15)', paddingRight: 6, marginRight: 4 }}>
+            <button 
+              onClick={() => setLang('EN')}
+              className="gov-btn" 
+              style={{ background: lang === 'EN' ? '#fff' : 'rgba(255,255,255,0.1)', color: lang === 'EN' ? '#1a4480' : '#fff', border: 'none', padding: '3px 8px', fontSize: 11, fontWeight: 700 }}
+            >
+              EN
+            </button>
+            <button 
+              onClick={() => setLang('HI')}
+              className="gov-btn" 
+              style={{ background: lang === 'HI' ? '#fff' : 'rgba(255,255,255,0.1)', color: lang === 'HI' ? '#1a4480' : '#fff', border: 'none', padding: '3px 8px', fontSize: 11, fontFamily: 'Noto Sans Devanagari, sans-serif' }}
+            >
+              हिंदी
+            </button>
+          </div>
+
+          {/* Dark / Light Toggle */}
+          <button
+            onClick={toggleTheme}
+            style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: 4, padding: '6px 8px', cursor: 'pointer', color: '#fff' }}
+            title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
+            className="flex items-center justify-center hover:bg-white/20 transition"
+          >
+            {theme === 'dark' ? <Sun className="w-4 h-4 text-amber-300" /> : <Moon className="w-4 h-4" />}
+          </button>
+        </div>
+      </header>
+
+      {/* Main Login Workspace */}
+      <div className="flex-1 flex items-center justify-center p-4 sm:p-6">
+        <div className="max-w-md w-full section-card shadow-lg p-6 sm:p-8 space-y-5">
           
-          {/* Permanent Device Unique ID Pill */}
-          <div className="bg-[#07111E] rounded-xl p-3 border border-slate-800 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Fingerprint className="w-4 h-4 text-cyan-400" />
-              <div>
-                <span className="text-[9px] text-slate-400 font-mono block uppercase">Permanent Device Vajra ID</span>
-                <strong className="text-xs font-mono font-bold text-white tracking-wider">
-                  {persistentVajraId || 'GENERATING...'}
-                </strong>
+          {/* Card Title */}
+          <div className="text-center space-y-1 pb-3 border-b border-gov-gray-border dark:border-slate-800">
+            <div className="inline-flex items-center justify-center w-12 h-12 rounded-lg bg-gov-blue-faint dark:bg-slate-800 border border-gov-blue-pale dark:border-slate-700 text-gov-blue dark:text-blue-400 mb-2">
+              <Building2 className="w-6 h-6" />
+            </div>
+            <h1 className="text-base sm:text-lg font-bold text-gov-blue-dark dark:text-white uppercase tracking-wide">
+              {t.loginPortalTitle}
+            </h1>
+            <p className="text-xs text-gov-gray dark:text-slate-400">
+              {t.loginSubtitle}
+            </p>
+          </div>
+
+          {/* Clean 2-Role Tabs: Govt EOC vs Volunteer Force */}
+          <div className="grid grid-cols-2 gap-1 p-1 bg-gov-gray-bg dark:bg-slate-900 rounded border border-gov-gray-border/60 dark:border-slate-800 text-xs">
+            <button
+              type="button"
+              onClick={() => handleRoleSwitch('GOVERNMENT')}
+              className={`py-2 px-2 rounded font-bold transition text-center ${
+                selectedRole === 'GOVERNMENT'
+                  ? 'bg-gov-blue text-white shadow-xs'
+                  : 'text-gov-gray hover:text-gov-blue-dark dark:hover:text-white'
+              }`}
+            >
+              🏛️ {lang === 'HI' ? 'सरकारी ईओसी' : 'Govt EOC Authority'}
+            </button>
+            <button
+              type="button"
+              onClick={() => handleRoleSwitch('VOLUNTEER')}
+              className={`py-2 px-2 rounded font-bold transition text-center ${
+                selectedRole === 'VOLUNTEER'
+                  ? 'bg-gov-blue text-white shadow-xs'
+                  : 'text-gov-gray hover:text-gov-blue-dark dark:hover:text-white'
+              }`}
+            >
+              🤝 {lang === 'HI' ? 'स्वयंसेवक दस्ता' : 'Volunteer Taskforce'}
+            </button>
+          </div>
+
+          {errorMessage && (
+            <div className="p-3 bg-red-50 dark:bg-red-950/60 border border-red-200 dark:border-red-800 text-severity-critical rounded text-xs flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{errorMessage}</span>
+            </div>
+          )}
+
+          {/* Login Form with Non-Overlapping Input Layout */}
+          <form onSubmit={handleSubmit} className="space-y-4 text-xs">
+            <div>
+              <label className="block font-semibold mb-1 text-gov-gray-dark dark:text-slate-300">
+                {t.officialEmail}
+              </label>
+              <div className="relative flex items-center">
+                <Mail className="w-4 h-4 text-gov-gray absolute left-3 pointer-events-none" />
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  style={{ paddingLeft: '34px' }}
+                  className="gov-input w-full py-2.5 text-xs"
+                />
               </div>
             </div>
-            <span className="text-[9px] bg-slate-800 text-slate-300 border border-slate-700 px-2 py-0.5 rounded font-mono font-bold">
-              NODE ID
-            </span>
-          </div>
 
-          {/* Role Selection Tabs */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-300 font-mono uppercase tracking-wider block">
-              Select Authenticated Access Portal:
-            </label>
-            <div className="grid grid-cols-2 gap-2 p-1 bg-[#07111E] rounded-xl border border-slate-800">
-              
-              {/* Government Command Button */}
-              <button
-                type="button"
-                onClick={() => handleRoleSwitch('GOVERNMENT')}
-                className={`py-2.5 px-3 rounded-lg flex items-center justify-center gap-2 transition cursor-pointer font-bold text-xs ${
-                  selectedRole === 'GOVERNMENT'
-                    ? 'bg-blue-600 text-white'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                <Building2 className="w-4 h-4" />
-                <span>🏛️ Govt EOC</span>
-              </button>
-
-              {/* Volunteer Operations Button */}
-              <button
-                type="button"
-                onClick={() => handleRoleSwitch('VOLUNTEER')}
-                className={`py-2.5 px-3 rounded-lg flex items-center justify-center gap-2 transition cursor-pointer font-bold text-xs ${
-                  selectedRole === 'VOLUNTEER'
-                    ? 'bg-emerald-600 text-white'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                <HeartPulse className="w-4 h-4" />
-                <span>🤝 Volunteer Force</span>
-              </button>
+            <div>
+              <label className="block font-semibold mb-1 text-gov-gray-dark dark:text-slate-300">
+                {t.password}
+              </label>
+              <div className="relative flex items-center">
+                <Lock className="w-4 h-4 text-gov-gray absolute left-3 pointer-events-none" />
+                <input
+                  type="password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  style={{ paddingLeft: '34px' }}
+                  className="gov-input w-full py-2.5 text-xs"
+                />
+              </div>
             </div>
-          </div>
 
-          {/* Sub-Tabs: Password / OTP / Vajra ID */}
-          <div className="flex border-b border-slate-800 text-xs font-mono font-bold">
-            <button
-              type="button"
-              onClick={() => { setAuthMode('PASSWORD'); setErrorMessage(null); }}
-              className={`flex-1 py-2 text-center border-b-2 transition cursor-pointer ${
-                authMode === 'PASSWORD' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              Password
-            </button>
-            <button
-              type="button"
-              onClick={() => { setAuthMode('OTP'); setErrorMessage(null); }}
-              className={`flex-1 py-2 text-center border-b-2 transition cursor-pointer ${
-                authMode === 'OTP' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              Official OTP
-            </button>
-            <button
-              type="button"
-              onClick={() => { setAuthMode('VAJRA_ID'); setErrorMessage(null); }}
-              className={`flex-1 py-2 text-center border-b-2 transition cursor-pointer ${
-                authMode === 'VAJRA_ID' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              Device ID Sign-In
-            </button>
-          </div>
-
-          {/* Form Content */}
-          <form onSubmit={handleSubmit} className="space-y-4">
-            
-            {/* Error Message Alert */}
-            {errorMessage && (
-              <div className="p-3 bg-red-950/80 border border-red-800 rounded-xl text-red-300 text-xs flex items-start gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-400" />
-                <span>{errorMessage}</span>
-              </div>
-            )}
-
-            {/* Mode 1 & 2: Email */}
-            {authMode !== 'VAJRA_ID' && (
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-300 flex items-center justify-between">
-                  <span>{selectedRole === 'GOVERNMENT' ? 'Official Government Email (.gov.in / .nic.in)' : 'Registered Volunteer Email'}</span>
-                </label>
-                <div className="relative">
-                  <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                    placeholder={selectedRole === 'GOVERNMENT' ? 'officer@ndrf.gov.in' : 'volunteer@redcross.org'}
-                    className="w-full bg-[#07111E] border border-slate-700 text-white rounded-xl pl-9 pr-3 py-2.5 text-xs font-mono focus:border-blue-500 focus:outline-none"
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* Mode 1: Password */}
-            {authMode === 'PASSWORD' && (
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-300 flex items-center justify-between">
-                  <span>Secure Access Key / Password</span>
-                </label>
-                <div className="relative">
-                  <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    placeholder="Enter security key"
-                    className="w-full bg-[#07111E] border border-slate-700 text-white rounded-xl pl-9 pr-3 py-2.5 text-xs font-mono focus:border-blue-500 focus:outline-none"
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* Mode 2: OTP */}
-            {authMode === 'OTP' && (
-              <div className="space-y-2">
-                <div className="flex gap-2">
-                  <div className="relative flex-1">
-                    <KeyRound className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-                    <input
-                      type="text"
-                      value={otp}
-                      onChange={(e) => setOtp(e.target.value)}
-                      maxLength={6}
-                      placeholder="Enter 6-digit OTP"
-                      className="w-full bg-[#07111E] border border-slate-700 text-white rounded-xl pl-9 pr-3 py-2.5 text-xs font-mono tracking-widest focus:border-blue-500 focus:outline-none"
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleSendOtp}
-                    className="px-3 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-bold font-mono transition cursor-pointer"
-                  >
-                    {otpSent ? 'Resend' : 'Send OTP'}
-                  </button>
-                </div>
-                {otpSent && (
-                  <p className="text-[11px] text-emerald-400 font-mono">
-                    ✓ Official OTP sent to {email}. Demo Code: <strong>829104</strong>
-                  </p>
-                )}
-              </div>
-            )}
-
-            {/* Mode 3: Vajra ID */}
-            {authMode === 'VAJRA_ID' && (
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-300 flex items-center justify-between">
-                  <span>Unique Mesh Node Vajra ID</span>
-                </label>
-                <div className="relative">
-                  <Fingerprint className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-                  <input
-                    type="text"
-                    value={inputVajraId}
-                    onChange={(e) => setInputVajraId(e.target.value)}
-                    required
-                    placeholder="VAJRA-XXXX-XXXX"
-                    className="w-full bg-[#07111E] border border-slate-700 text-white rounded-xl pl-9 pr-3 py-2.5 text-xs font-mono uppercase tracking-wider focus:border-blue-500 focus:outline-none"
-                  />
-                </div>
-                <p className="text-[10px] text-slate-400 font-mono mt-1">
-                  Connects directly through hardware identity without requiring internet password exchange.
-                </p>
-              </div>
-            )}
-
-            {/* Submit Button */}
             <button
               type="submit"
-              className={`w-full py-3 rounded-xl font-bold text-xs tracking-wider uppercase transition cursor-pointer ${
-                selectedRole === 'GOVERNMENT'
-                  ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm'
-                  : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm'
-              }`}
+              disabled={loading}
+              className="gov-btn btn-primary w-full justify-center py-2.5 text-xs font-bold shadow-sm cursor-pointer"
             >
-              Authenticate & Enter {selectedRole === 'GOVERNMENT' ? 'Command Center' : 'Volunteer Force'}
+              {loading ? t.signingIn : t.signInBtn}
             </button>
           </form>
 
+          {/* Statutory Notice */}
+          <p className="text-[10px] text-gov-gray text-center leading-relaxed pt-3 border-t border-gov-gray-border/50 dark:border-slate-800">
+            {t.loginSecurityNotice}
+          </p>
+
         </div>
-
-        {/* Security Notice */}
-        <p className="text-center text-[11px] text-slate-400 font-mono">
-          🔒 Encrypted disaster communication channel • Official NDRF / DMA Portal
-        </p>
-
       </div>
+
     </div>
   );
 }

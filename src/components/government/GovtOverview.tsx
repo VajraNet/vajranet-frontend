@@ -1,45 +1,60 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { 
+  ShieldAlert, 
   Flame, 
-  Users, 
+  Building2, 
+  HeartPulse, 
+  Radio, 
   Clock, 
+  MapPin, 
+  Users, 
+  RefreshCw,
+  Plus,
+  AlertTriangle,
   ArrowRight,
-  ShieldAlert,
-  Radio
+  ExternalLink,
+  PhoneCall
 } from 'lucide-react';
 import { TacticalGISMap } from '../common/TacticalGISMap';
-import { TrustedDeviceManager } from './TrustedDeviceManager';
 import { governmentApi } from '../../api/government';
 import { apiClient } from '../../api/client';
-import { GovernmentOverview } from '../../types/api';
+import { GovernmentOverview, Announcement } from '../../types/api';
+import { TRANSLATIONS, Language } from '../../utils/translations';
+
+export type GovtTab = 'OVERVIEW' | 'SOS' | 'INCIDENTS' | 'SHELTERS' | 'HOSPITALS' | 'RELIEF' | 'ANNOUNCEMENTS' | 'TRUSTED_DEVICES' | 'MAP';
 
 interface GovtOverviewProps {
-  onNavigateTab: (tab: 'SOS' | 'INCIDENTS' | 'ANNOUNCEMENTS' | 'SHELTERS' | 'HOSPITALS' | 'RELIEF') => void;
+  onNavigateTab: (tab: GovtTab) => void;
+  lang?: Language;
 }
 
-export function GovtOverview({ onNavigateTab }: GovtOverviewProps) {
+export function GovtOverview({ onNavigateTab, lang = 'EN' }: GovtOverviewProps) {
   const [overview, setOverview] = useState<GovernmentOverview>({
     active_sos_count: 0,
     active_incidents_count: 0,
     critical_incidents_count: 0,
-    volunteers_responding_count: 0,
     total_shelter_capacity: 0,
     total_shelter_occupied: 0,
     available_hospital_beds: 0,
     available_icu_beds: 0,
   });
+
   const [recentEvents, setRecentEvents] = useState<any[]>([]);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+
+  const t = TRANSLATIONS[lang];
 
   const fetchOverviewData = useCallback(async () => {
     try {
-      const [overviewRes, sosRes, incRes, shelterRes, hospRes, volRes] = await Promise.allSettled([
+      const [overviewRes, sosRes, incRes, shelterRes, hospRes, volRes, annRes] = await Promise.allSettled([
         governmentApi.getOverview(),
         apiClient.get('/sos'),
         apiClient.get('/incidents'),
         apiClient.get('/shelters'),
         apiClient.get('/hospitals'),
-        apiClient.get('/volunteers/tasks')
+        apiClient.get('/volunteers'),
+        apiClient.get('/announcements'),
       ]);
 
       let activeSos = 0;
@@ -58,14 +73,18 @@ export function GovtOverview({ onNavigateTab }: GovtOverviewProps) {
         if (Array.isArray(list)) {
           const activeList = list.filter((s: any) => s.status !== 'RESOLVED' && s.status !== 'CANCELLED');
           activeSos = activeList.length;
-          activeList.slice(0, 3).forEach((s: any) => {
+          activeList.slice(0, 6).forEach((s: any) => {
             combinedEvents.push({
-              id: s.id || s.message_id,
-              title: s.message || 'Citizen distress beacon triggered',
+              id: s.message_id || s.id,
+              title: s.message || `Citizen in distress! Immediate assistance required at (${s.latitude?.toFixed(4)}, ${s.longitude?.toFixed(4)}).`,
               severity: s.severity || 'CRITICAL',
               time: s.created_at ? new Date(s.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Live',
               type: 'SOS',
-              nav: 'SOS' as const
+              nav: 'SOS' as const,
+              latitude: s.latitude,
+              longitude: s.longitude,
+              address: s.address,
+              message: s.message
             });
           });
         }
@@ -78,14 +97,18 @@ export function GovtOverview({ onNavigateTab }: GovtOverviewProps) {
           const activeIncList = list.filter((i: any) => i.status !== 'RESOLVED');
           activeInc = activeIncList.length;
           criticalInc = activeIncList.filter((i: any) => i.severity === 'CRITICAL').length;
-          activeIncList.slice(0, 3).forEach((inc: any) => {
+          activeIncList.slice(0, 4).forEach((inc: any) => {
             combinedEvents.push({
-              id: inc.id || inc.message_id,
+              id: inc.message_id || inc.id,
               title: inc.title || inc.description || 'Hazard reported',
               severity: inc.severity || 'HIGH',
               time: inc.created_at ? new Date(inc.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Live',
               type: 'INCIDENT',
-              nav: 'INCIDENTS' as const
+              nav: 'INCIDENTS' as const,
+              latitude: inc.latitude,
+              longitude: inc.longitude,
+              address: inc.address,
+              message: inc.description
             });
           });
         }
@@ -121,35 +144,31 @@ export function GovtOverview({ onNavigateTab }: GovtOverviewProps) {
         }
       }
 
-      // Merge with overview endpoint if available
+      // 6. Process Announcements
+      if (annRes.status === 'fulfilled') {
+        const list = annRes.value.data?.data || annRes.value.data;
+        if (Array.isArray(list)) {
+          setAnnouncements(list.slice(0, 4));
+        }
+      }
+
+      // Set Overview Counts
       if (overviewRes.status === 'fulfilled' && overviewRes.value) {
         const d = overviewRes.value;
         setOverview({
           active_sos_count: activeSos || d.active_sos_count || 0,
           active_incidents_count: activeInc || d.active_incidents_count || 0,
           critical_incidents_count: criticalInc || d.critical_incidents_count || 0,
-          volunteers_responding_count: volunteersCount || d.volunteers_responding_count || 0,
           total_shelter_capacity: totalCapacity || d.total_shelter_capacity || 0,
           total_shelter_occupied: totalOccupied || d.total_shelter_occupied || 0,
           available_hospital_beds: availBeds || d.available_hospital_beds || 0,
           available_icu_beds: availIcu || d.available_icu_beds || 0,
         });
-      } else {
-        setOverview({
-          active_sos_count: activeSos,
-          active_incidents_count: activeInc,
-          critical_incidents_count: criticalInc,
-          volunteers_responding_count: volunteersCount,
-          total_shelter_capacity: totalCapacity,
-          total_shelter_occupied: totalOccupied,
-          available_hospital_beds: availBeds,
-          available_icu_beds: availIcu,
-        });
       }
 
-      setRecentEvents(combinedEvents.slice(0, 5));
-    } catch (err: any) {
-      console.warn('Overview fetch warning:', err);
+      setRecentEvents(combinedEvents);
+    } catch (err) {
+      console.warn('Overview load note:', err);
     } finally {
       setLoading(false);
     }
@@ -171,189 +190,283 @@ export function GovtOverview({ onNavigateTab }: GovtOverviewProps) {
     };
   }, [fetchOverviewData]);
 
+  const shelterPercent = overview.total_shelter_capacity > 0 
+    ? Math.round((overview.total_shelter_occupied / overview.total_shelter_capacity) * 100) 
+    : 0;
+
+  // Handle Event Click: Pan map directly to coordinates!
+  const handleEventClick = (ev: any) => {
+    if (ev.latitude && ev.longitude) {
+      window.dispatchEvent(new CustomEvent('vajranet_focus_map_location', {
+        detail: {
+          latitude: Number(ev.latitude),
+          longitude: Number(ev.longitude),
+          id: ev.id,
+          type: ev.type,
+          title: ev.title,
+          message: ev.title,
+          address: ev.address || `GPS: (${Number(ev.latitude).toFixed(4)}, ${Number(ev.longitude).toFixed(4)})`
+        }
+      }));
+    } else {
+      onNavigateTab(ev.nav);
+    }
+  };
+
   return (
     <div className="space-y-6">
       
-      {/* Executive Government EOC Command Banner */}
-      <div className="bg-[#0F1E36] border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-xl">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-xl bg-white border border-slate-700 p-1 flex items-center justify-center shrink-0">
-              <img 
-                src="/vajranet-icon.jpg" 
-                alt="VajraNet Emblem" 
-                className="w-full h-full object-contain rounded" 
-              />
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-lg sm:text-xl font-bold text-white tracking-wide uppercase">
-                  National Disaster Emergency Operations Center
-                </h1>
-                <span className="text-[10px] bg-blue-600 text-white px-2.5 py-0.5 rounded-full font-mono font-bold">
-                  LEVEL 1 EOC
-                </span>
-              </div>
-              <p className="text-xs text-slate-300 font-mono font-medium mt-0.5 flex items-center gap-2">
-                <span>VAJRANET DISASTER COMMUNICATION PLATFORM</span>
-                <span className="text-slate-400 font-normal hidden sm:inline">• Authority Incident Command</span>
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2.5 self-start md:self-auto font-mono text-xs">
-            <div className="px-3 py-1.5 rounded-lg bg-[#07111E] border border-slate-800 text-slate-300 flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-              <span className="text-[11px] font-bold">P2P MESH UPLINK ONLINE</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Top 3 Primary EOC KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      {/* 4 Primary Government KPI HUD Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         
         {/* KPI 1: Active SOS */}
         <div 
           onClick={() => onNavigateTab('SOS')}
-          className="bg-[#0F1E36] border border-red-900/60 hover:border-red-600 rounded-2xl p-5 shadow-lg cursor-pointer transition group"
+          className="section-card p-4 hover:border-gov-blue cursor-pointer transition shadow-sm group"
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-red-300 uppercase tracking-wider font-mono">Active SOS Alerts</span>
-            <div className="w-8 h-8 rounded-lg bg-red-950 border border-red-800 flex items-center justify-center text-red-400">
+            <span className="text-[11px] font-bold text-gov-gray dark:text-slate-400 uppercase tracking-wider font-mono">{t.activeSosDistress}</span>
+            <div className="w-7 h-7 rounded bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800 flex items-center justify-center text-severity-critical">
               <ShieldAlert className="w-4 h-4" />
             </div>
           </div>
-          <div className="mt-3 flex items-baseline justify-between">
-            <span className="text-3xl font-bold text-white">{overview.active_sos_count}</span>
-            <span className="text-xs text-red-400 flex items-center gap-1 font-bold group-hover:translate-x-1 transition">
-              Manage SOS →
+          <div className="mt-2 flex items-baseline justify-between">
+            <span className="text-2xl sm:text-3xl font-bold text-severity-critical font-mono">{overview.active_sos_count}</span>
+            <span className="text-xs text-gov-blue dark:text-blue-400 font-semibold group-hover:translate-x-0.5 transition flex items-center gap-1">
+              {t.triage} →
             </span>
           </div>
-          <p className="text-[11px] text-slate-400 mt-1 font-mono">Requires immediate triage & dispatch</p>
+          <p className="text-[11px] text-gov-gray dark:text-slate-400 mt-1">{t.requiresImmediateDispatch}</p>
         </div>
 
         {/* KPI 2: Active Incidents */}
         <div 
           onClick={() => onNavigateTab('INCIDENTS')}
-          className="bg-[#0F1E36] border border-amber-900/60 hover:border-amber-600 rounded-2xl p-5 shadow-lg cursor-pointer transition group"
+          className="section-card p-4 hover:border-gov-blue cursor-pointer transition shadow-sm group"
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-amber-300 uppercase tracking-wider font-mono">Disaster Incidents</span>
-            <div className="w-8 h-8 rounded-lg bg-amber-950 border border-amber-800 flex items-center justify-center text-amber-400">
+            <span className="text-[11px] font-bold text-gov-gray dark:text-slate-400 uppercase tracking-wider font-mono">{t.disasterIncidents}</span>
+            <div className="w-7 h-7 rounded bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800 flex items-center justify-center text-severity-high">
               <Flame className="w-4 h-4" />
             </div>
           </div>
-          <div className="mt-3 flex items-baseline justify-between">
-            <span className="text-3xl font-bold text-white">{overview.active_incidents_count}</span>
-            <span className="text-xs text-amber-400 flex items-center gap-1 font-bold group-hover:translate-x-1 transition">
-              View Feed →
+          <div className="mt-2 flex items-baseline justify-between">
+            <span className="text-2xl sm:text-3xl font-bold text-[#1e2533] dark:text-white font-mono">{overview.active_incidents_count}</span>
+            <span className="text-xs text-gov-blue dark:text-blue-400 font-semibold group-hover:translate-x-0.5 transition flex items-center gap-1">
+              {t.sitRep} →
             </span>
           </div>
-          <p className="text-[11px] text-slate-400 mt-1 font-mono">{overview.critical_incidents_count} critical hazards flagged</p>
+          <p className="text-[11px] text-gov-gray dark:text-slate-400 mt-1">{overview.critical_incidents_count} {t.markedCritical}</p>
         </div>
 
-        {/* KPI 3: Responding Volunteers */}
-        <div className="bg-[#0F1E36] border border-emerald-900/60 rounded-2xl p-5 shadow-lg">
+        {/* KPI 3: Shelter Occupancy */}
+        <div 
+          onClick={() => onNavigateTab('SHELTERS')}
+          className="section-card p-4 hover:border-gov-blue cursor-pointer transition shadow-sm group"
+        >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-emerald-300 uppercase tracking-wider font-mono">Field Responders</span>
-            <div className="w-8 h-8 rounded-lg bg-emerald-950 border border-emerald-800 flex items-center justify-center text-emerald-400">
-              <Users className="w-4 h-4" />
+            <span className="text-[11px] font-bold text-gov-gray dark:text-slate-400 uppercase tracking-wider font-mono">{t.shelterCapacity}</span>
+            <div className="w-7 h-7 rounded bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800 flex items-center justify-center text-gov-blue dark:text-blue-400">
+              <Building2 className="w-4 h-4" />
             </div>
           </div>
-          <div className="mt-3 flex items-baseline justify-between">
-            <span className="text-3xl font-bold text-white">{overview.volunteers_responding_count}</span>
-            <span className="text-xs text-emerald-400 font-mono font-bold bg-emerald-950 px-2 py-0.5 rounded border border-emerald-800">
-              REGISTERED
-            </span>
+          <div className="mt-2 flex items-baseline justify-between">
+            <span className="text-2xl sm:text-3xl font-bold text-[#1e2533] dark:text-white font-mono">{overview.total_shelter_occupied} <span className="text-xs text-gov-gray font-normal font-sans">/ {overview.total_shelter_capacity}</span></span>
+            <span className="text-xs font-bold text-status-online font-mono">{shelterPercent}% {t.occupied}</span>
           </div>
-          <p className="text-[11px] text-slate-400 mt-1 font-mono">Volunteer responders & rescue teams</p>
+          <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full mt-2 overflow-hidden">
+            <div 
+              className="bg-gov-blue h-full rounded-full transition-all duration-500" 
+              style={{ width: `${Math.min(shelterPercent, 100)}%` }}
+            />
+          </div>
+        </div>
+
+        {/* KPI 4: Hospital & ICU Beds */}
+        <div 
+          onClick={() => onNavigateTab('HOSPITALS')}
+          className="section-card p-4 hover:border-gov-blue cursor-pointer transition shadow-sm group"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-gov-gray dark:text-slate-400 uppercase tracking-wider font-mono">{t.availableBedsIcu}</span>
+            <div className="w-7 h-7 rounded bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 flex items-center justify-center text-status-online">
+              <HeartPulse className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="mt-2 flex items-baseline justify-between">
+            <span className="text-2xl sm:text-3xl font-bold text-status-online font-mono">{overview.available_hospital_beds}</span>
+            <span className="text-xs text-severity-high font-bold font-mono">{overview.available_icu_beds} ICU</span>
+          </div>
+          <p className="text-[11px] text-gov-gray dark:text-slate-400 mt-1">{t.readyForMassCasualty}</p>
         </div>
 
       </div>
 
-      {/* Secondary Resource Telemetry Strip */}
-      <div className="bg-[#0F1E36] border border-slate-800 rounded-2xl p-3.5 grid grid-cols-2 md:grid-cols-4 gap-3 text-xs font-mono">
-        <div className="bg-[#07111E] p-2.5 rounded-xl border border-slate-800">
-          <span className="text-slate-400 block text-[10px] uppercase">Shelter Occupancy</span>
-          <span className="text-blue-400 font-bold text-sm">
-            {overview.total_shelter_occupied} / {overview.total_shelter_capacity}
-          </span>
+      {/* Split Tactical Grid: GIS Situation Map (Left 7 cols) + Live Priority Feeds (Right 5 cols) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+        
+        {/* Left Column: Tactical GIS Situation Map (Clean Full Container with Fixed Header) */}
+        <div className="lg:col-span-7 flex flex-col h-[480px]">
+          <TacticalGISMap />
         </div>
-        <div className="bg-[#07111E] p-2.5 rounded-xl border border-slate-800">
-          <span className="text-slate-400 block text-[10px] uppercase">Available Hospital Beds</span>
-          <span className="text-emerald-400 font-bold text-sm">
-            {overview.available_hospital_beds} Beds Live
-          </span>
-        </div>
-        <div className="bg-[#07111E] p-2.5 rounded-xl border border-slate-800">
-          <span className="text-slate-400 block text-[10px] uppercase">Available ICU Units</span>
-          <span className="text-cyan-400 font-bold text-sm">
-            {overview.available_icu_beds} Live ICU
-          </span>
-        </div>
-        <div className="bg-[#07111E] p-2.5 rounded-xl border border-slate-800 flex items-center justify-between">
-          <div>
-            <span className="text-slate-400 block text-[10px] uppercase">P2P Mesh Gateway</span>
-            <span className="text-emerald-400 font-bold text-sm">Uplink Synced</span>
-          </div>
-          <Radio className="w-4 h-4 text-emerald-400" />
-        </div>
-      </div>
 
-      {/* Main EOC Canvas: Active Incident Map */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider font-mono flex items-center gap-1.5">
-            <span>🗺️ Active Incident & Beacon Spatial Grid</span>
-          </h3>
-          <span className="text-[10px] text-slate-400 font-mono">Live database telemetry</span>
-        </div>
-        <TacticalGISMap height="520px" />
-      </div>
+        {/* Right Column: Live Priority Feed & Quick Actions */}
+        <div className="lg:col-span-5 flex flex-col justify-between space-y-4">
+          
+          {/* Live Alerts Queue with Direct Map Focusing on Click */}
+          <div className="section-card flex-1 flex flex-col shadow-sm">
+            <div className="px-4 py-2.5 border-b border-gov-gray-border dark:border-slate-800 flex items-center justify-between bg-gov-gray-bg dark:bg-slate-900/80">
+              <div className="flex items-center gap-2">
+                <span className="status-dot dot-offline animate-pulse" />
+                <h2 className="text-xs font-bold uppercase tracking-wider text-gov-gray-dark dark:text-slate-200">
+                  {t.priorityAlertsFeed}
+                </h2>
+              </div>
+              <span className="text-[10px] font-mono text-gov-gray">{t.realTime}</span>
+            </div>
 
-      {/* Recent Critical Events Activity Feed */}
-      {recentEvents.length > 0 && (
-        <div className="bg-[#0F1E36] border border-slate-800 rounded-2xl p-5 shadow-xl space-y-3">
-          <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-            <h3 className="text-xs font-bold text-white uppercase tracking-wider font-mono flex items-center gap-2">
-              <Clock className="w-3.5 h-3.5 text-blue-400" />
-              <span>Recent Critical Operations Log</span>
-            </h3>
-            <span className="text-[10px] text-slate-400 font-mono">Live Dispatch Feed</span>
-          </div>
+            <div className="p-3 flex-1 overflow-y-auto divide-y divide-gov-gray-border/50 dark:divide-slate-800/80 space-y-2 max-h-[260px]">
+              {recentEvents.length === 0 ? (
+                <div className="p-6 text-center text-xs text-gov-gray">
+                  {t.noActiveAlerts}
+                </div>
+              ) : (
+                recentEvents.map((ev, i) => (
+                  <div 
+                    key={ev.id + i} 
+                    onClick={() => handleEventClick(ev)}
+                    className="pt-2 first:pt-0 cursor-pointer hover:bg-gov-blue-faint dark:hover:bg-slate-800/60 p-2 rounded transition group"
+                    title="Click to locate on Map"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className={`gov-badge ${ev.severity === 'CRITICAL' ? 'badge-critical' : ev.severity === 'HIGH' ? 'badge-high' : 'badge-medium'}`}>
+                          {ev.type}
+                        </span>
+                        <span className="font-mono text-xs font-bold text-gov-blue-dark dark:text-blue-300">{ev.id}</span>
+                      </div>
+                      <span className="text-[10px] font-mono text-gov-gray flex items-center gap-1">
+                        <Clock className="w-3 h-3" /> {ev.time}
+                      </span>
+                    </div>
+                    <p className="text-xs text-[#1e2533] dark:text-slate-200 font-medium mt-1 line-clamp-1 group-hover:text-gov-blue dark:group-hover:text-blue-300">
+                      {ev.title}
+                    </p>
+                    {ev.latitude && ev.longitude && (
+                      <span className="text-[10px] text-gov-gray font-mono flex items-center gap-1 mt-0.5">
+                        <MapPin className="w-2.5 h-2.5 text-severity-critical" />
+                        <span>({ev.latitude.toFixed(4)}, {ev.longitude.toFixed(4)}) · Click to Pan Map</span>
+                      </span>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
 
-          <div className="divide-y divide-slate-800/80">
-            {recentEvents.map((evt) => (
-              <div 
-                key={evt.id}
-                onClick={() => onNavigateTab(evt.nav)}
-                className="py-3 flex items-center justify-between gap-3 hover:bg-slate-800/40 px-2 rounded-xl cursor-pointer transition group"
+            <div className="p-2 border-t border-gov-gray-border dark:border-slate-800 bg-gov-gray-bg dark:bg-slate-900/60 flex items-center justify-between">
+              <button 
+                onClick={() => onNavigateTab('SOS')}
+                className="gov-btn btn-ghost btn-sm w-full justify-center"
               >
-                <div className="flex items-center gap-3">
-                  <span className={`px-2 py-0.5 rounded text-[9px] font-bold font-mono ${
-                    evt.severity === 'CRITICAL' 
-                      ? 'bg-red-950 text-red-400 border border-red-800' 
-                      : evt.severity === 'HIGH'
-                      ? 'bg-amber-950 text-amber-400 border border-amber-800'
-                      : 'bg-blue-950 text-blue-400 border border-blue-800'
-                  }`}>
-                    {evt.severity}
-                  </span>
-                  <div>
-                    <h4 className="text-xs font-bold text-slate-200 group-hover:text-blue-400 transition">{evt.title}</h4>
-                    <span className="text-[10px] text-slate-400 font-mono">{evt.time}</span>
+                {t.viewFullSosStream} →
+              </button>
+            </div>
+          </div>
+
+          {/* Quick Action Commands */}
+          <div className="section-card p-3.5 shadow-sm">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-gov-gray-dark dark:text-slate-200 mb-2.5">
+              {t.eocQuickActions}
+            </h3>
+            <div className="grid grid-cols-2 gap-2">
+              <button 
+                onClick={() => onNavigateTab('ANNOUNCEMENTS')}
+                className="gov-btn btn-secondary text-xs justify-center py-2 cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" /> {t.broadcastAlert}
+              </button>
+              <button 
+                onClick={() => onNavigateTab('INCIDENTS')}
+                className="gov-btn btn-secondary text-xs justify-center py-2 cursor-pointer"
+              >
+                <Flame className="w-3.5 h-3.5 text-severity-high" /> {t.reportIncident}
+              </button>
+              <button 
+                onClick={() => onNavigateTab('SHELTERS')}
+                className="gov-btn btn-ghost text-xs justify-center py-2 cursor-pointer"
+              >
+                <Building2 className="w-3.5 h-3.5" /> {t.manageShelters}
+              </button>
+              <button 
+                onClick={() => onNavigateTab('TRUSTED_DEVICES')}
+                className="gov-btn btn-ghost text-xs justify-center py-2 cursor-pointer"
+              >
+                <PhoneCall className="w-3.5 h-3.5 text-gov-blue" /> {t.trustedDevices}
+              </button>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+      {/* Official Directives & Evacuation Broadcast Feed */}
+      <div className="section-card p-4 shadow-sm">
+        <div className="flex items-center justify-between pb-3 border-b border-gov-gray-border dark:border-slate-800">
+          <div className="flex items-center gap-2">
+            <Radio className="w-4 h-4 text-gov-blue dark:text-blue-400" />
+            <h3 className="text-xs font-bold uppercase tracking-wider text-gov-gray-dark dark:text-slate-200">
+              {t.officialAnnouncements}
+            </h3>
+          </div>
+          <button 
+            onClick={() => onNavigateTab('ANNOUNCEMENTS')}
+            className="text-xs font-semibold text-gov-blue dark:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer"
+          >
+            {t.manage} →
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+          {announcements.length === 0 ? (
+            <div className="col-span-2 text-center py-4 text-xs text-gov-gray">
+              {t.noBroadcasts || 'No active announcements published.'}
+            </div>
+          ) : (
+            announcements.map((ann) => {
+              const severity = (ann.severity || 'HIGH').toUpperCase();
+              const badgeClass = severity === 'CRITICAL' 
+                ? 'badge-critical' 
+                : severity === 'HIGH' 
+                ? 'badge-high' 
+                : 'badge-medium';
+
+              return (
+                <div 
+                  key={ann.id} 
+                  className="p-3 rounded bg-gov-gray-bg dark:bg-slate-900 border border-gov-gray-border/60 dark:border-slate-800/80 space-y-1.5 shadow-xs"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-bold text-xs text-[#1e2533] dark:text-white truncate">
+                      {ann.title}
+                    </span>
+                    <span className={`gov-badge ${badgeClass} text-[9px] font-bold font-mono px-2 py-0.5 shrink-0`}>
+                      {severity}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gov-gray-dark dark:text-slate-300 line-clamp-2 leading-relaxed">
+                    {ann.content}
+                  </p>
+                  <div className="flex items-center justify-between text-[10px] text-gov-gray pt-1 border-t border-gov-gray-border/30 dark:border-slate-800/50">
+                    <span>{t.area || 'Target Zone'}: <strong className="text-gov-gray-dark dark:text-slate-200">{ann.target_zone || 'All Sectors'}</strong></span>
+                    <span>{t.published || 'Published'}: <strong className="text-gov-gray-dark dark:text-slate-200">{ann.issued_at ? new Date(ann.issued_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Recent'}</strong></span>
                   </div>
                 </div>
-                <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-blue-400 group-hover:translate-x-1 transition shrink-0" />
-              </div>
-            ))}
-          </div>
+              );
+            })
+          )}
         </div>
-      )}
-
-      {/* Trusted SMS Relay Devices Management Section */}
-      <TrustedDeviceManager />
+      </div>
 
     </div>
   );

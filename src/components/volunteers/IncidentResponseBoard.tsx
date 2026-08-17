@@ -2,11 +2,19 @@ import React, { useEffect, useState } from 'react';
 import { IncidentCreateModal } from '../common/IncidentCreateModal';
 import { apiClient } from '../../api/client';
 import { Plus, Flame, RefreshCw, CheckCircle2, UserCheck, MapPin } from 'lucide-react';
+import { TRANSLATIONS, Language } from '../../utils/translations';
 
-export function IncidentResponseBoard() {
+interface IncidentResponseBoardProps {
+  lang?: Language;
+}
+
+export function IncidentResponseBoard({ lang = 'EN' }: IncidentResponseBoardProps) {
   const [incidents, setIncidents] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+
+  const t = TRANSLATIONS[lang];
+
   const getPersistentClaimed = (): Set<string> => {
     try {
       const saved = localStorage.getItem('vajranet_claimed_tasks');
@@ -82,7 +90,6 @@ export function IncidentResponseBoard() {
     setClaimedIncidentIds(nextSet);
     localStorage.setItem('vajranet_claimed_tasks', JSON.stringify(Array.from(nextSet)));
 
-    // Also update task status override so it appears in Assigned Field Tasks
     try {
       const taskCache = JSON.parse(localStorage.getItem('vajranet_task_status_cache') || '{}');
       taskCache[incident.id] = 'IN_PROGRESS';
@@ -98,128 +105,157 @@ export function IncidentResponseBoard() {
           zone: incident.location?.zone || incident.zone || 'Sector 4',
           incident_id: incident.id,
           priority: incident.severity || 'HIGH',
+          status: 'IN_PROGRESS'
         })
       ]);
-    } catch (err: any) {
-      console.warn('Incident claimed locally and queued', err);
+    } catch {
+      // Handled in persistent set
     }
-
-    setIncidents((prev) =>
-      prev.map((i) => (i.id === incident.id ? { ...i, status: 'IN_PROGRESS' } : i))
-    );
     window.dispatchEvent(new CustomEvent('vajranet_data_updated'));
   }
 
-  const activeIncidents = incidents.filter(i => i.status !== 'RESOLVED');
-
   return (
-    <div className="bg-[#0F1E36] border border-slate-800 rounded-2xl p-5 lg:p-6 space-y-6 shadow-xl">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+    <div className="space-y-4">
+      
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 section-card p-4 shadow-sm">
         <div>
-          <h2 className="text-base font-bold text-white flex items-center gap-2">
-            <Flame className="w-5 h-5 text-amber-400" />
-            <span>Volunteer Incident Response Board</span>
-            <span className="text-[10px] bg-amber-950 text-amber-400 border border-amber-800 px-2 py-0.2 rounded-full font-mono font-bold">
-              {activeIncidents.length} AVAILABLE
+          <div className="flex items-center gap-2">
+            <Flame className="w-5 h-5 text-severity-high" />
+            <h1 className="text-base font-bold text-[#1e2533] dark:text-white uppercase tracking-wider">
+              {lang === 'HI' ? 'फील्ड आपदा घटनाएं व राहत कार्य' : 'Active Disaster Incident Board'}
+            </h1>
+            <span className="gov-badge badge-high font-mono font-bold">
+              {incidents.length} {lang === 'HI' ? 'घटनाएं' : 'INCIDENTS'}
             </span>
-          </h2>
-          <p className="text-xs text-slate-400 mt-0.5 font-mono">
-            Claim field rescue tasks, report localized ground hazards, and coordinate sector relief.
+          </div>
+          <p className="text-xs text-gov-gray dark:text-slate-400 mt-0.5">
+            {lang === 'HI' ? 'सत्यापित आपदा घटनाएं जिनका राहत कार्य स्वयंसेवक दस्ते स्वीकार कर सकते हैं' : 'Verified community hazards and disaster incidents available for volunteer field response'}
           </p>
         </div>
 
         <div className="flex items-center gap-2">
-          <button
-            onClick={fetchIncidents}
-            className="p-2 bg-[#07111E] hover:bg-slate-800 text-slate-300 border border-slate-700 rounded-xl transition cursor-pointer"
-            title="Refresh Incidents"
+          <button 
+            onClick={fetchIncidents} 
+            className="gov-btn btn-ghost btn-sm"
           >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /> {t.refresh}
           </button>
           <button
             onClick={() => setIsModalOpen(true)}
-            className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl flex items-center gap-1.5 transition cursor-pointer shadow-sm"
+            className="gov-btn btn-primary btn-sm"
           >
-            <Plus className="w-4 h-4" />
-            <span>Report Incident</span>
+            <Plus className="w-3.5 h-3.5" /> {t.reportIncident}
           </button>
         </div>
       </div>
 
-      {/* List of Incidents */}
-      {activeIncidents.length === 0 && !loading ? (
-        <div className="p-8 text-center bg-[#07111E] border border-slate-800 rounded-xl text-slate-400 text-xs font-mono">
-          ✓ No active ground incidents requiring volunteer dispatch right now.
+      {/* Incidents Table */}
+      <div className="section-card overflow-hidden shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="gov-table">
+            <thead>
+              <tr>
+                <th>{t.thIncidentId}</th>
+                <th>{t.thTypeTitle}</th>
+                <th>{t.thDescription}</th>
+                <th>{t.thIncidentLocation}</th>
+                <th>{t.thSeverity}</th>
+                <th className="text-right">{t.thResponseActions}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading && incidents.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-8 text-center text-xs text-gov-gray">
+                    <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-gov-blue" />
+                    {t.loadingIncidents}
+                  </td>
+                </tr>
+              ) : incidents.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-8 text-center text-xs text-gov-gray">
+                    {t.noMatchingIncidents}
+                  </td>
+                </tr>
+              ) : (
+                incidents.map((incident) => {
+                  const isClaimed = claimedIncidentIds.has(incident.id);
+                  return (
+                    <tr key={incident.id} className="hover:bg-gov-blue-faint/60 dark:hover:bg-slate-800/40">
+                      
+                      {/* ID */}
+                      <td className="font-mono font-bold text-xs text-gov-blue-dark dark:text-blue-300">
+                        {incident.id}
+                      </td>
+
+                      {/* Title & Type */}
+                      <td>
+                        <div className="font-bold text-xs text-[#1e2533] dark:text-white">
+                          {incident.title || 'Community Disaster Event'}
+                        </div>
+                        <span className="gov-badge badge-medium text-[10px] mt-0.5 inline-block">
+                          {incident.type || 'HAZARD'}
+                        </span>
+                      </td>
+
+                      {/* Description */}
+                      <td className="max-w-xs text-xs text-gov-gray-dark dark:text-slate-300">
+                        <p className="line-clamp-2">{incident.description || 'Verified field event'}</p>
+                      </td>
+
+                      {/* Location */}
+                      <td className="text-xs font-mono">
+                        <div className="flex items-center gap-1 text-[#2d3748] dark:text-slate-300">
+                          <MapPin className="w-3.5 h-3.5 text-gov-blue shrink-0" />
+                          <span>{incident.location?.zone || incident.zone || incident.area || 'Zone 4'}</span>
+                        </div>
+                      </td>
+
+                      {/* Severity */}
+                      <td>
+                        <span className={`gov-badge ${incident.severity === 'CRITICAL' ? 'badge-critical' : incident.severity === 'HIGH' ? 'badge-high' : 'badge-medium'}`}>
+                          {incident.severity || 'HIGH'}
+                        </span>
+                      </td>
+
+                      {/* Response Action */}
+                      <td className="text-right whitespace-nowrap">
+                        {isClaimed ? (
+                          <span className="gov-badge badge-online inline-flex items-center gap-1">
+                            <UserCheck className="w-3 h-3" />
+                            {lang === 'HI' ? 'कार्यभार स्वीकृत' : 'Claimed by You'}
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => handleClaimIncident(incident)}
+                            className="gov-btn btn-secondary btn-sm"
+                          >
+                            {lang === 'HI' ? 'कार्य स्वीकारें' : 'Claim Response Task'}
+                          </button>
+                        )}
+                      </td>
+
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
         </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {activeIncidents.map((inc) => {
-            const isClaimed = claimedIncidentIds.has(inc.id);
+      </div>
 
-            return (
-              <div
-                key={inc.id}
-                className="bg-[#07111E] border border-slate-800 hover:border-slate-700 rounded-xl p-4 flex flex-col justify-between space-y-3 transition"
-              >
-                <div>
-                  <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-                    <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded bg-amber-950 text-amber-400 border border-amber-800">
-                      {inc.severity || 'HIGH'}
-                    </span>
-                    <span className="text-[10px] text-slate-500 font-mono">
-                      {inc.created_at ? new Date(inc.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Live'}
-                    </span>
-                  </div>
-
-                  <h3 className="text-sm font-bold text-white mt-2.5">{inc.title || inc.description}</h3>
-                  {inc.title && inc.description && (
-                    <p className="text-xs text-slate-300 mt-1">{inc.description}</p>
-                  )}
-                  <p className="text-xs text-slate-400 font-mono mt-1 flex items-center gap-1">
-                    <MapPin className="w-3 h-3 text-slate-500" />
-                    <span>{inc.address || inc.location?.address || `GPS: ${inc.latitude}, ${inc.longitude}`}</span>
-                  </p>
-                </div>
-
-                <div className="pt-2 border-t border-slate-800 flex justify-end">
-                  <button
-                    onClick={() => handleClaimIncident(inc)}
-                    disabled={isClaimed}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold font-mono flex items-center gap-1 transition cursor-pointer ${
-                      isClaimed
-                        ? 'bg-slate-800 text-slate-400 border border-slate-700'
-                        : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm'
-                    }`}
-                  >
-                    {isClaimed ? (
-                      <>
-                        <UserCheck className="w-3.5 h-3.5" />
-                        <span>Claimed by You</span>
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        <span>Claim Incident</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+      {isModalOpen && (
+        <IncidentCreateModal
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          onIncidentCreated={() => {
+            fetchIncidents();
+            window.dispatchEvent(new CustomEvent('vajranet_data_updated'));
+          }}
+        />
       )}
 
-      {/* Modal */}
-      <IncidentCreateModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onSuccess={(created) => {
-          setIncidents((prev) => [created, ...prev]);
-          window.dispatchEvent(new CustomEvent('vajranet_data_updated'));
-        }}
-        reporterRole="VOLUNTEER"
-      />
     </div>
   );
 }

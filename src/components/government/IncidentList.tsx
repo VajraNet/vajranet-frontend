@@ -1,362 +1,455 @@
 import React, { useEffect, useState } from 'react';
-import { Incident, EmergencyStatus } from '../../types/api';
+import { Incident, SeverityLevel, IncidentStatus } from '../../types/api';
 import { governmentApi } from '../../api/government';
-import { apiClient } from '../../api/client';
-import { IncidentCreateModal } from '../common/IncidentCreateModal';
-import { Plus, Flame, RefreshCw, CheckCircle2, UserCheck, MapPin } from 'lucide-react';
+import { 
+  Flame, 
+  MapPin, 
+  Plus, 
+  RefreshCw, 
+  Search, 
+  Filter, 
+  Users, 
+  CheckCircle2, 
+  AlertTriangle,
+  X,
+  Clock
+} from 'lucide-react';
+import { TRANSLATIONS, Language } from '../../utils/translations';
 
-export function IncidentList() {
+interface IncidentListProps {
+  lang?: Language;
+}
+
+export function IncidentList({ lang = 'EN' }: IncidentListProps) {
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Filters & Search
+  const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [typeFilter, setTypeFilter] = useState<string>('ALL');
-  const [severityFilter, setSeverityFilter] = useState<string>('ALL');
-  const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
-  const [assignedIncidentIds, setAssignedIncidentIds] = useState<Set<string>>(() => {
-    try {
-      const saved = localStorage.getItem('vajranet_dispatched_incidents');
-      return saved ? new Set(JSON.parse(saved)) : new Set();
-    } catch {
-      return new Set();
-    }
+  const [searchQuery, setSearchQuery] = useState<string>('');
+
+  // Add Incident Modal
+  const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
+  const [formData, setFormData] = useState({
+    title: '',
+    description: '',
+    type: 'FLOOD',
+    severity: 'HIGH' as SeverityLevel,
+    latitude: 28.6139,
+    longitude: 77.2090,
+    area: '',
   });
 
-  const getResolvedIncidentIds = (): Set<string> => {
-    try {
-      const saved = localStorage.getItem('vajranet_resolved_incident_ids');
-      return saved ? new Set(JSON.parse(saved)) : new Set();
-    } catch {
-      return new Set();
-    }
-  };
+  const t = TRANSLATIONS[lang];
 
   useEffect(() => {
     fetchIncidents();
-    const interval = setInterval(fetchIncidents, 5000);
-    return () => clearInterval(interval);
   }, []);
 
   async function fetchIncidents() {
+    setLoading(true);
     try {
       const data = await governmentApi.getIncidents();
-      const resolvedSet = getResolvedIncidentIds();
-
       if (Array.isArray(data)) {
-        const activeOnly = data.filter((item: any) => 
-          item.status !== 'RESOLVED' && 
-          item.status !== 'COMPLETED' && 
-          !resolvedSet.has(item.id)
-        );
-        setIncidents(activeOnly);
+        setIncidents(data);
       } else {
         setIncidents([]);
       }
-
-      // Sync dispatched tasks from backend
-      try {
-        const tasksRes = await apiClient.get('/volunteers/tasks');
-        const tasks = tasksRes.data?.data || tasksRes.data;
-        if (Array.isArray(tasks)) {
-          const taskIncidentIds = tasks.map((t: any) => t.incident_id || t.id).filter(Boolean);
-          if (taskIncidentIds.length > 0) {
-            setAssignedIncidentIds((prev) => {
-              const updated = new Set(prev);
-              taskIncidentIds.forEach((id: string) => updated.add(id));
-              try {
-                localStorage.setItem('vajranet_dispatched_incidents', JSON.stringify(Array.from(updated)));
-              } catch {}
-              return updated;
-            });
-          }
-        }
-      } catch {}
-    } catch (err) {
+      setError(null);
+    } catch (err: any) {
+      setError(err.message || 'Failed to fetch incidents');
       setIncidents([]);
     } finally {
       setLoading(false);
     }
   }
 
-  async function handleStatusUpdate(id: string, newStatus: EmergencyStatus) {
-    if (newStatus === 'RESOLVED') {
-      try {
-        const resolvedSet = getResolvedIncidentIds();
-        resolvedSet.add(id);
-        localStorage.setItem('vajranet_resolved_incident_ids', JSON.stringify(Array.from(resolvedSet)));
-      } catch {}
-
-      // Immediately purge from active incident feed
-      setIncidents((prev) => prev.filter((item) => item.id !== id));
-      window.dispatchEvent(new CustomEvent('vajranet_data_updated'));
-
-      try {
-        await Promise.any([
-          apiClient.delete(`/incidents/${id}`),
-          apiClient.delete(`/government/incidents/${id}`),
-          governmentApi.updateIncidentStatus(id, 'RESOLVED')
-        ]);
-      } catch (err) {
-        console.warn('Incident resolved and synced locally', err);
-      }
-    } else {
+  async function handleStatusUpdate(id: string, newStatus: IncidentStatus) {
+    try {
+      await governmentApi.updateIncidentStatus(id, newStatus);
       setIncidents((prev) =>
         prev.map((item) => (item.id === id ? { ...item, status: newStatus } : item))
       );
       window.dispatchEvent(new CustomEvent('vajranet_data_updated'));
-
-      try {
-        await governmentApi.updateIncidentStatus(id, newStatus);
-      } catch (err) {
-        console.warn('Incident status updated locally', err);
-      }
+    } catch (err) {
+      setIncidents((prev) =>
+        prev.map((item) => (item.id === id ? { ...item, status: newStatus } : item))
+      );
     }
   }
 
-  async function handleAssignVolunteers(incidentId: string) {
-    const nextSet = new Set(assignedIncidentIds).add(incidentId);
-    setAssignedIncidentIds(nextSet);
-    try {
-      localStorage.setItem('vajranet_dispatched_incidents', JSON.stringify(Array.from(nextSet)));
-    } catch {}
+  async function handleCreateIncident(e: React.FormEvent) {
+    e.preventDefault();
+    if (!formData.title.trim()) return;
 
     try {
-      const inc = incidents.find((i) => i.id === incidentId);
-      await apiClient.post('/volunteers/tasks', {
-        title: `Priority Dispatch: ${inc?.title || inc?.description?.slice(0, 30)}`,
-        description: inc?.description || 'Government EOC Priority Task',
-        zone: inc?.location?.zone || inc?.zone || 'Zone 1',
-        incident_id: incidentId,
-        priority: inc?.severity || 'HIGH',
+      const payload: any = {
+        title: formData.title,
+        description: formData.description,
+        type: formData.type,
+        severity: formData.severity,
+        latitude: formData.latitude,
+        longitude: formData.longitude,
+        area: formData.area || 'Central District',
+        status: 'VERIFIED',
+      };
+      const created = await governmentApi.createIncident(payload);
+      setIncidents((prev) => [created, ...prev]);
+      setIsAddModalOpen(false);
+      setFormData({
+        title: '',
+        description: '',
+        type: 'FLOOD',
+        severity: 'HIGH',
+        latitude: 28.6139,
+        longitude: 77.2090,
+        area: '',
       });
       window.dispatchEvent(new CustomEvent('vajranet_data_updated'));
-    } catch {
-      window.dispatchEvent(new CustomEvent('vajranet_data_updated'));
+    } catch (err) {
+      const fallbackCreated: any = {
+        ...formData,
+        id: `inc-${Date.now()}`,
+        status: 'VERIFIED',
+        created_at: new Date().toISOString(),
+      };
+      setIncidents((prev) => [fallbackCreated, ...prev]);
+      setIsAddModalOpen(false);
     }
   }
 
   const filteredIncidents = incidents.filter((inc) => {
-    const disasterType = inc.disaster_type || inc.type || 'OTHER';
-    if (typeFilter !== 'ALL' && disasterType !== typeFilter) return false;
-    if (severityFilter !== 'ALL' && inc.severity !== severityFilter) return false;
-    return true;
+    const matchesSearch =
+      (inc.title || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (inc.description || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (inc.area || '').toLowerCase().includes(searchQuery.toLowerCase());
+
+    const matchesStatus = statusFilter === 'ALL' || inc.status === statusFilter;
+    const matchesType = typeFilter === 'ALL' || inc.type === typeFilter;
+
+    return matchesSearch && matchesStatus && matchesType;
   });
 
-  const getSeverityBadge = (sev: string) => {
-    switch (sev) {
-      case 'CRITICAL':
-        return 'bg-red-950 text-red-400 border-red-800';
-      case 'HIGH':
-        return 'bg-amber-950 text-amber-400 border-amber-800';
-      case 'MEDIUM':
-        return 'bg-cyan-950 text-cyan-400 border-cyan-800';
-      default:
-        return 'bg-emerald-950 text-emerald-400 border-emerald-800';
-    }
-  };
-
-  const getStatusBadge = (status?: string) => {
-    switch (status) {
-      case 'REPORTED':
-      case 'PENDING':
-        return 'bg-amber-950 text-amber-400 border-amber-800';
-      case 'IN_PROGRESS':
-        return 'bg-blue-950 text-blue-400 border-blue-800';
-      case 'RESOLVED':
-        return 'bg-emerald-950 text-emerald-400 border-emerald-800';
-      default:
-        return 'bg-slate-800 text-slate-300 border-slate-700';
-    }
-  };
-
   return (
-    <div className="bg-[#0F1E36] border border-slate-800 rounded-2xl p-5 lg:p-6 space-y-6 shadow-xl">
+    <div className="space-y-4">
       
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 section-card p-4 shadow-sm">
         <div>
-          <h2 className="text-base font-bold text-white flex items-center gap-2">
-            <Flame className="w-5 h-5 text-amber-400" />
-            <span>Disaster Hazards & Verified Incidents</span>
-            <span className="text-[10px] bg-amber-950 text-amber-400 border border-amber-800 px-2 py-0.2 rounded-full font-mono font-bold">
-              {filteredIncidents.length} INCIDENTS
+          <div className="flex items-center gap-2">
+            <Flame className="w-5 h-5 text-severity-high" />
+            <h1 className="text-base font-bold text-[#1e2533] dark:text-white uppercase tracking-wider">
+              {t.incidentsSitRepTitle}
+            </h1>
+            <span className="gov-badge badge-high font-mono font-bold">
+              {filteredIncidents.length} {lang === 'HI' ? 'सक्रिय घटनाएं' : 'ACTIVE SIT-REPS'}
             </span>
-          </h2>
-          <p className="text-xs text-slate-400 mt-0.5 font-mono">
-            Ground hazard monitoring, severity escalation, and direct responder task assignment.
+          </div>
+          <p className="text-xs text-gov-gray dark:text-slate-400 mt-0.5">
+            {t.incidentsSitRepSubtext}
           </p>
         </div>
 
         <div className="flex items-center gap-2">
-          <button
-            onClick={fetchIncidents}
-            className="p-2 bg-[#07111E] hover:bg-slate-800 text-slate-300 border border-slate-700 rounded-xl transition cursor-pointer"
-            title="Refresh Incident Feed"
+          <button 
+            onClick={fetchIncidents} 
+            className="gov-btn btn-ghost btn-sm"
           >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /> {t.refresh}
           </button>
           <button
-            onClick={() => setIsModalOpen(true)}
-            className="bg-red-600 hover:bg-red-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl flex items-center gap-1.5 transition cursor-pointer shadow-sm"
+            onClick={() => setIsAddModalOpen(true)}
+            className="gov-btn btn-primary btn-sm"
           >
-            <Plus className="w-4 h-4" />
-            <span>Report Incident</span>
+            <Plus className="w-3.5 h-3.5" /> {t.logDisasterIncident}
           </button>
         </div>
       </div>
 
-      {/* Filters Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-[#07111E] p-3 rounded-xl border border-slate-800 text-xs font-mono">
+      {/* Filter and Search Bar */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 section-card p-3 shadow-sm">
+        
+        {/* Status Filter Tabs */}
+        <div className="flex items-center gap-1 overflow-x-auto pb-1 md:pb-0">
+          <button
+            onClick={() => setStatusFilter('ALL')}
+            className={`tab-btn ${statusFilter === 'ALL' ? 'active' : ''}`}
+          >
+            {t.tabAll}
+          </button>
+          <button
+            onClick={() => setStatusFilter('REPORTED')}
+            className={`tab-btn ${statusFilter === 'REPORTED' ? 'active' : ''}`}
+          >
+            {lang === 'HI' ? 'प्राप्त' : 'REPORTED'}
+          </button>
+          <button
+            onClick={() => setStatusFilter('VERIFIED')}
+            className={`tab-btn ${statusFilter === 'VERIFIED' ? 'active' : ''}`}
+          >
+            {lang === 'HI' ? 'सत्यापित' : 'VERIFIED'}
+          </button>
+          <button
+            onClick={() => setStatusFilter('RESPONDING')}
+            className={`tab-btn ${statusFilter === 'RESPONDING' ? 'active' : ''}`}
+          >
+            {lang === 'HI' ? 'प्रतिक्रिया जारी' : 'RESPONDING'}
+          </button>
+          <button
+            onClick={() => setStatusFilter('RESOLVED')}
+            className={`tab-btn ${statusFilter === 'RESOLVED' ? 'active' : ''}`}
+          >
+            {t.tabResolved}
+          </button>
+        </div>
+
+        {/* Search and Type Filter */}
         <div className="flex items-center gap-2">
-          <span className="text-slate-400">Type:</span>
+          <div className="relative">
+            <Search className="w-3.5 h-3.5 text-gov-gray absolute left-2.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder={t.searchIncidentPlaceholder}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="gov-input pl-8 py-1 text-xs w-48 sm:w-64"
+            />
+          </div>
+
           <select
             value={typeFilter}
             onChange={(e) => setTypeFilter(e.target.value)}
-            className="bg-[#0F1E36] border border-slate-700 rounded-lg px-2.5 py-1 text-white focus:outline-none"
+            className="gov-input py-1 text-xs"
           >
-            <option value="ALL">All Types</option>
-            <option value="FLOOD">Flood</option>
-            <option value="FIRE">Fire</option>
+            <option value="ALL">{t.allIncidentTypes}</option>
+            <option value="FLOOD">Flood / Inundation</option>
+            <option value="FIRE">Fire Hazard</option>
+            <option value="EARTHQUAKE">Earthquake / Structural</option>
             <option value="LANDSLIDE">Landslide</option>
-            <option value="BUILDING_COLLAPSE">Building Collapse</option>
-            <option value="MEDICAL">Medical Emergency</option>
-            <option value="OTHER">Other Hazards</option>
+            <option value="CYCLONE">Cyclone / Storm</option>
           </select>
         </div>
 
-        <div className="flex items-center gap-2">
-          <span className="text-slate-400">Severity:</span>
-          <select
-            value={severityFilter}
-            onChange={(e) => setSeverityFilter(e.target.value)}
-            className="bg-[#0F1E36] border border-slate-700 rounded-lg px-2.5 py-1 text-white focus:outline-none"
-          >
-            <option value="ALL">All Severities</option>
-            <option value="CRITICAL">Critical</option>
-            <option value="HIGH">High</option>
-            <option value="MEDIUM">Medium</option>
-            <option value="LOW">Low</option>
-          </select>
+      </div>
+
+      {/* Incidents Table */}
+      <div className="section-card overflow-hidden shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="gov-table">
+            <thead>
+              <tr>
+                <th>{t.thIncidentId}</th>
+                <th>{t.thTypeTitle}</th>
+                <th>{t.thDescription}</th>
+                <th>{t.thIncidentLocation}</th>
+                <th>{t.thSeverity}</th>
+                <th>{t.thStatus}</th>
+                <th className="text-right">{t.thResponseActions}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading && incidents.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="py-8 text-center text-xs text-gov-gray">
+                    <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-gov-blue" />
+                    {t.loadingIncidents}
+                  </td>
+                </tr>
+              ) : filteredIncidents.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="py-8 text-center text-xs text-gov-gray">
+                    {t.noMatchingIncidents}
+                  </td>
+                </tr>
+              ) : (
+                filteredIncidents.map((inc) => (
+                  <tr key={inc.id} className="hover:bg-gov-blue-faint/60 dark:hover:bg-slate-800/40">
+                    
+                    {/* ID */}
+                    <td className="font-mono font-bold text-xs text-gov-blue-dark dark:text-blue-300">
+                      {inc.id}
+                    </td>
+
+                    {/* Type & Title */}
+                    <td>
+                      <div className="font-bold text-xs text-[#1e2533] dark:text-white">
+                        {inc.title}
+                      </div>
+                      <span className="gov-badge badge-medium text-[10px] mt-0.5 inline-block">
+                        {inc.type}
+                      </span>
+                    </td>
+
+                    {/* Description */}
+                    <td className="max-w-xs text-xs text-gov-gray-dark dark:text-slate-300">
+                      <p className="line-clamp-2">{inc.description || 'Hazard sit-rep'}</p>
+                    </td>
+
+                    {/* Location */}
+                    <td className="text-xs font-mono">
+                      <div className="flex items-center gap-1 text-[#2d3748] dark:text-slate-300">
+                        <MapPin className="w-3.5 h-3.5 text-gov-blue shrink-0" />
+                        <span>{inc.area || `${inc.latitude.toFixed(3)}, ${inc.longitude.toFixed(3)}`}</span>
+                      </div>
+                    </td>
+
+                    {/* Severity */}
+                    <td>
+                      <span className={`gov-badge ${inc.severity === 'CRITICAL' ? 'badge-critical' : inc.severity === 'HIGH' ? 'badge-high' : 'badge-medium'}`}>
+                        {inc.severity || 'HIGH'}
+                      </span>
+                    </td>
+
+                    {/* Status */}
+                    <td>
+                      <span className={`gov-badge ${inc.status === 'VERIFIED' ? 'badge-high' : inc.status === 'RESPONDING' ? 'badge-medium' : inc.status === 'RESOLVED' ? 'badge-resolved' : 'badge-low'}`}>
+                        {inc.status || 'REPORTED'}
+                      </span>
+                    </td>
+
+                    {/* Action buttons */}
+                    <td className="text-right whitespace-nowrap">
+                      <div className="inline-flex items-center gap-1.5">
+                        {inc.status !== 'RESPONDING' && inc.status !== 'RESOLVED' && (
+                          <button
+                            onClick={() => handleStatusUpdate(inc.id, 'RESPONDING')}
+                            className="gov-btn btn-secondary btn-sm"
+                          >
+                            {t.dispatched}
+                          </button>
+                        )}
+                        {inc.status !== 'RESOLVED' && (
+                          <button
+                            onClick={() => handleStatusUpdate(inc.id, 'RESOLVED')}
+                            className="gov-btn btn-primary btn-sm"
+                          >
+                            {t.btnResolve}
+                          </button>
+                        )}
+                      </div>
+                    </td>
+
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
 
-      {/* Incident Cards */}
-      {filteredIncidents.length === 0 && !loading ? (
-        <div className="p-8 text-center bg-[#07111E] border border-slate-800 rounded-xl text-slate-400 text-xs font-mono">
-          No matching disaster incidents found in database.
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {filteredIncidents.map((inc) => {
-            const disasterType = inc.disaster_type || inc.type || 'HAZARD';
-            const isAssigned = assignedIncidentIds.has(inc.id);
-
-            return (
-              <div
-                key={inc.id}
-                className="bg-[#07111E] border border-slate-800 hover:border-slate-700 rounded-xl p-4 transition space-y-3"
+      {/* Add Incident Modal */}
+      {isAddModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <form 
+            onSubmit={handleCreateIncident}
+            className="bg-white dark:bg-[#151e2e] border border-gov-gray-border dark:border-slate-800 rounded-lg max-w-md w-full p-5 shadow-2xl space-y-4"
+          >
+            <div className="flex items-center justify-between border-b border-gov-gray-border dark:border-slate-800 pb-3">
+              <h3 className="font-bold text-sm text-[#1e2533] dark:text-white uppercase tracking-wider">
+                {t.logDisasterIncident}
+              </h3>
+              <button 
+                type="button"
+                onClick={() => setIsAddModalOpen(false)}
+                className="text-gov-gray hover:text-[#1e2533] dark:hover:text-white"
               >
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-800">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs font-bold text-white font-mono">{inc.id}</span>
-                    <span className={`text-[10px] font-bold font-mono px-2 py-0.5 rounded border ${getSeverityBadge(inc.severity)}`}>
-                      {inc.severity}
-                    </span>
-                    <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
-                      {disasterType}
-                    </span>
-                    <span className={`text-[10px] font-bold font-mono px-2 py-0.5 rounded border ${getStatusBadge(inc.status)}`}>
-                      {inc.status}
-                    </span>
-                  </div>
+                <X className="w-4 h-4" />
+              </button>
+            </div>
 
-                  <span className="text-[10px] text-slate-500 font-mono">
-                    {inc.created_at || inc.reported_at ? new Date(inc.created_at || inc.reported_at!).toLocaleString() : 'Live'}
-                  </span>
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="block font-semibold mb-1 text-gov-gray-dark dark:text-slate-300">
+                  {lang === 'HI' ? 'घटना का शीर्षक *' : 'Incident Title *'}
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Flash Flood Inundation — Sector 4"
+                  value={formData.title}
+                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                  className="gov-input w-full"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold mb-1 text-gov-gray-dark dark:text-slate-300">Hazard Category</label>
+                  <select
+                    value={formData.type}
+                    onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+                    className="gov-input w-full"
+                  >
+                    <option value="FLOOD">Flood</option>
+                    <option value="FIRE">Fire</option>
+                    <option value="EARTHQUAKE">Earthquake</option>
+                    <option value="LANDSLIDE">Landslide</option>
+                    <option value="CYCLONE">Cyclone</option>
+                  </select>
                 </div>
 
                 <div>
-                  <h4 className="text-sm font-bold text-white">{inc.title || inc.description}</h4>
-                  {inc.title && inc.description && (
-                    <p className="text-xs text-slate-300 mt-1">{inc.description}</p>
-                  )}
-                  <p className="text-xs text-slate-400 font-mono mt-1 flex items-center gap-1">
-                    <MapPin className="w-3 h-3 text-slate-500" />
-                    <span>{inc.address || inc.location?.address || `Lat: ${inc.latitude}, Lon: ${inc.longitude}`}</span>
-                  </p>
-                </div>
-
-                {/* Media Attachment */}
-                {Array.isArray(inc.media_urls) && inc.media_urls.length > 0 && (
-                  <div className="flex gap-2 overflow-x-auto pt-1">
-                    {inc.media_urls.map((url, idx) => (
-                      <a key={idx} href={url} target="_blank" rel="noopener noreferrer" className="shrink-0">
-                        <img src={url} alt="Evidence" className="h-16 w-24 object-cover rounded-lg border border-slate-700" />
-                      </a>
-                    ))}
-                  </div>
-                )}
-
-                {/* Action Controls */}
-                <div className="flex items-center justify-between pt-2 border-t border-slate-800 text-xs font-mono">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-slate-400 text-[11px]">Update Status:</span>
-                    <button
-                      onClick={() => handleStatusUpdate(inc.id, 'REPORTED')}
-                      className="px-2.5 py-1 bg-amber-950 hover:bg-amber-900 text-amber-300 border border-amber-800 rounded-lg font-bold cursor-pointer"
-                    >
-                      Reported
-                    </button>
-                    <button
-                      onClick={() => handleStatusUpdate(inc.id, 'IN_PROGRESS')}
-                      className="px-2.5 py-1 bg-blue-950 hover:bg-blue-900 text-blue-300 border border-blue-800 rounded-lg font-bold cursor-pointer"
-                    >
-                      In Progress
-                    </button>
-                    <button
-                      onClick={() => handleStatusUpdate(inc.id, 'RESOLVED')}
-                      className="px-2.5 py-1 bg-emerald-950 hover:bg-emerald-900 text-emerald-300 border border-emerald-800 rounded-lg font-bold cursor-pointer"
-                    >
-                      Resolve
-                    </button>
-                  </div>
-
-                  <button
-                    onClick={() => handleAssignVolunteers(inc.id)}
-                    disabled={isAssigned}
-                    className={`px-3 py-1 rounded-lg font-bold flex items-center gap-1 transition cursor-pointer ${
-                      isAssigned
-                        ? 'bg-slate-800 text-slate-400 border border-slate-700'
-                        : 'bg-amber-600 hover:bg-amber-700 text-white shadow-sm'
-                    }`}
+                  <label className="block font-semibold mb-1 text-gov-gray-dark dark:text-slate-300">{t.thSeverity}</label>
+                  <select
+                    value={formData.severity}
+                    onChange={(e: any) => setFormData({ ...formData, severity: e.target.value })}
+                    className="gov-input w-full"
                   >
-                    {isAssigned ? (
-                      <>
-                        <UserCheck className="w-3.5 h-3.5" />
-                        <span>Dispatched</span>
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        <span>Dispatch Responders</span>
-                      </>
-                    )}
-                  </button>
+                    <option value="CRITICAL">{t.critical}</option>
+                    <option value="HIGH">{t.high}</option>
+                    <option value="MEDIUM">{t.medium}</option>
+                    <option value="LOW">{t.low}</option>
+                  </select>
                 </div>
               </div>
-            );
-          })}
+
+              <div>
+                <label className="block font-semibold mb-1 text-gov-gray-dark dark:text-slate-300">
+                  {lang === 'HI' ? 'लक्षित क्षेत्र / मोहल्ला' : 'Area / Neighborhood'}
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Kalyanpur Riverbank"
+                  value={formData.area}
+                  onChange={(e) => setFormData({ ...formData, area: e.target.value })}
+                  className="gov-input w-full"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold mb-1 text-gov-gray-dark dark:text-slate-300">
+                  {lang === 'HI' ? 'विवरण' : 'Field Sit-Rep Description'}
+                </label>
+                <textarea
+                  rows={3}
+                  placeholder="Details of water levels, trapped residents, emergency resources needed..."
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  className="gov-input w-full"
+                />
+              </div>
+            </div>
+
+            <div className="pt-3 border-t border-gov-gray-border dark:border-slate-800 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setIsAddModalOpen(false)}
+                className="gov-btn btn-ghost btn-sm"
+              >
+                {t.cancel}
+              </button>
+              <button
+                type="submit"
+                className="gov-btn btn-primary btn-sm"
+              >
+                Record Incident
+              </button>
+            </div>
+          </form>
         </div>
       )}
-
-      {/* Report Incident Modal */}
-      <IncidentCreateModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onSuccess={(created) => {
-          setIncidents((prev) => [created, ...prev]);
-          window.dispatchEvent(new CustomEvent('vajranet_data_updated'));
-        }}
-        reporterRole="GOVT_EOC"
-      />
 
     </div>
   );

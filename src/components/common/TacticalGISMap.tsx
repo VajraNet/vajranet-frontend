@@ -3,9 +3,9 @@ import L from 'leaflet';
 import { 
   Compass, 
   Crosshair, 
-  RefreshCw,
-  MapPin,
-  ShieldAlert
+  RefreshCw, 
+  MapPin, 
+  X
 } from 'lucide-react';
 import { apiClient } from '../../api/client';
 import { SOSPayload, Incident, ResourceShelter, ResourceHospital, ResourceReliefCenter } from '../../types/api';
@@ -17,20 +17,54 @@ interface TacticalGISMapProps {
   readOnly?: boolean;
 }
 
+export type MapTheme = 'GOOGLE_STREET' | 'GOOGLE_HYBRID' | 'DARK' | 'OSM';
+
+// Robust, high-detail tactical tile servers including Google Maps with full place names
+const TILE_SERVERS: Record<MapTheme, { url: string; subdomains: string; maxZoom: number; label: string; description: string }> = {
+  GOOGLE_STREET: {
+    label: '🗺️ Google Maps',
+    url: 'https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
+    subdomains: '0123',
+    maxZoom: 20,
+    description: 'Detailed Google Maps with full place names, landmarks, roads, and institutions'
+  },
+  GOOGLE_HYBRID: {
+    label: '🛰️ Google Satellite',
+    url: 'https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
+    subdomains: '0123',
+    maxZoom: 20,
+    description: 'High-res Satellite imagery with place names and road labels overlaid'
+  },
+  DARK: {
+    label: '🌙 Dark Grid',
+    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+    subdomains: 'abcd',
+    maxZoom: 19,
+    description: 'Tactical high-contrast dark theme for 24/7 EOC operations'
+  },
+  OSM: {
+    label: '📍 OpenStreetMap',
+    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    subdomains: 'abc',
+    maxZoom: 19,
+    description: 'Standard OpenStreetMap global road network'
+  }
+};
+
 export function TacticalGISMap({ 
   initialCenter = [28.6139, 77.2090], 
   zoom = 13,
-  height = '620px'
+  height
 }: TacticalGISMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const markersLayerRef = useRef<L.LayerGroup | null>(null);
 
-  // Filter state: default STREET grid
+  // Filter state
   const [activeLayer, setActiveLayer] = useState<'ALL' | 'SOS' | 'INCIDENTS' | 'SHELTERS' | 'HOSPITALS' | 'RELIEF'>('ALL');
   const [selectedEntity, setSelectedEntity] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [mapTheme, setMapTheme] = useState<'STREET' | 'DARK'>('STREET');
+  const [mapTheme, setMapTheme] = useState<MapTheme>('GOOGLE_STREET');
 
   // Live Data state
   const [sosList, setSosList] = useState<SOSPayload[]>([]);
@@ -51,7 +85,6 @@ export function TacticalGISMap({
         apiClient.get('/relief-centers'),
       ]);
 
-      // SOS
       if (sosRes.status === 'fulfilled') {
         const d = sosRes.value.data?.data || sosRes.value.data;
         if (Array.isArray(d)) {
@@ -59,7 +92,6 @@ export function TacticalGISMap({
         }
       }
 
-      // Incidents
       if (incRes.status === 'fulfilled') {
         const d = incRes.value.data?.data || incRes.value.data;
         if (Array.isArray(d)) {
@@ -67,7 +99,6 @@ export function TacticalGISMap({
         }
       }
 
-      // Shelters
       if (shRes.status === 'fulfilled') {
         const d = shRes.value.data?.data || shRes.value.data;
         if (Array.isArray(d)) {
@@ -75,7 +106,6 @@ export function TacticalGISMap({
         }
       }
 
-      // Hospitals
       if (hospRes.status === 'fulfilled') {
         const d = hospRes.value.data?.data || hospRes.value.data;
         if (Array.isArray(d)) {
@@ -83,7 +113,6 @@ export function TacticalGISMap({
         }
       }
 
-      // Relief Centers
       if (rcRes.status === 'fulfilled') {
         const d = rcRes.value.data?.data || rcRes.value.data;
         if (Array.isArray(d)) {
@@ -100,11 +129,7 @@ export function TacticalGISMap({
   useEffect(() => {
     loadGISData();
     const interval = setInterval(loadGISData, 5000);
-
-    const handleUpdate = () => {
-      loadGISData();
-    };
-
+    const handleUpdate = () => loadGISData();
     window.addEventListener('vajranet_data_updated', handleUpdate);
 
     return () => {
@@ -113,148 +138,149 @@ export function TacticalGISMap({
     };
   }, [loadGISData]);
 
-  // 2. Initialize Leaflet Map safely with Street Grid default
+  // 2. Initialize Leaflet Map
   useEffect(() => {
     if (!mapContainerRef.current) return;
 
-    if (mapInstanceRef.current) {
-      try {
-        mapInstanceRef.current.remove();
-      } catch (e) {}
-      mapInstanceRef.current = null;
-    }
+    if (!mapInstanceRef.current) {
+      const config = TILE_SERVERS[mapTheme];
 
-    if ((mapContainerRef.current as any)._leaflet_id) {
-      delete (mapContainerRef.current as any)._leaflet_id;
-    }
-
-    let map: L.Map;
-    try {
-      map = L.map(mapContainerRef.current, {
+      const map = L.map(mapContainerRef.current, {
         center: initialCenter,
         zoom: zoom,
         zoomControl: false,
+        attributionControl: false,
       });
-    } catch (e) {
-      if ((mapContainerRef.current as any)._leaflet_id) {
-        delete (mapContainerRef.current as any)._leaflet_id;
-      }
-      map = L.map(mapContainerRef.current, {
-        center: initialCenter,
-        zoom: zoom,
-        zoomControl: false,
-      });
+
+      L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+      const tileLayer = L.tileLayer(config.url, {
+        maxZoom: config.maxZoom,
+        subdomains: config.subdomains,
+      }).addTo(map);
+
+      (map as any)._currentTileLayer = tileLayer;
+
+      const markersLayer = L.layerGroup().addTo(map);
+      markersLayerRef.current = markersLayer;
+      mapInstanceRef.current = map;
+
+      setTimeout(() => {
+        map.invalidateSize();
+      }, 150);
     }
-
-    L.control.zoom({ position: 'bottomright' }).addTo(map);
-
-    // Street grid default (Carto Voyager) vs Dark Grid (Carto Dark)
-    const tileUrl = mapTheme === 'DARK'
-      ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-      : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
-
-    L.tileLayer(tileUrl, {
-      attribution: '&copy; CartoDB &copy; OpenStreetMap contributors',
-      maxZoom: 19,
-    }).addTo(map);
-
-    const markersLayer = L.layerGroup().addTo(map);
-    markersLayerRef.current = markersLayer;
-    mapInstanceRef.current = map;
-
-    const timer = setTimeout(() => {
-      if (mapInstanceRef.current) {
-        try {
-          mapInstanceRef.current.invalidateSize();
-        } catch (e) {}
-      }
-    }, 150);
 
     return () => {
-      clearTimeout(timer);
       if (mapInstanceRef.current) {
-        try {
-          mapInstanceRef.current.remove();
-        } catch (e) {}
+        mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
-      }
-      if (mapContainerRef.current && (mapContainerRef.current as any)._leaflet_id) {
-        delete (mapContainerRef.current as any)._leaflet_id;
       }
     };
   }, []);
 
-  // Switch Tile Layer when Theme changes
+  // Handle Dynamic Window Focus Location Event (from SOS Priority Feed clicks)
+  useEffect(() => {
+    const handleFocusLocation = (e: any) => {
+      const { latitude, longitude, id, type, title, message, address } = e.detail || {};
+      if (latitude && longitude && mapInstanceRef.current) {
+        mapInstanceRef.current.flyTo([latitude, longitude], 15, {
+          duration: 1.2
+        });
+
+        setSelectedEntity({
+          type: type || 'SOS',
+          data: {
+            id: id || 'SOS-ALERT',
+            name: title || id || 'Distress Alert',
+            message: message || 'Citizen in distress! Immediate assistance required.',
+            address: address || `Coordinates: (${latitude.toFixed(5)}, ${longitude.toFixed(5)})`,
+            latitude,
+            longitude
+          }
+        });
+      }
+    };
+
+    window.addEventListener('vajranet_focus_map_location', handleFocusLocation);
+    return () => {
+      window.removeEventListener('vajranet_focus_map_location', handleFocusLocation);
+    };
+  }, []);
+
+  // Update Basemap Tiles on theme switch
   useEffect(() => {
     if (!mapInstanceRef.current) return;
     const map = mapInstanceRef.current;
-    map.eachLayer((layer) => {
-      if (layer instanceof L.TileLayer) {
-        map.removeLayer(layer);
-      }
-    });
+    
+    if ((map as any)._currentTileLayer) {
+      map.removeLayer((map as any)._currentTileLayer);
+    }
 
-    const tileUrl = mapTheme === 'DARK'
-      ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-      : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
-
-    L.tileLayer(tileUrl, {
-      attribution: '&copy; CartoDB &copy; OpenStreetMap contributors',
-      maxZoom: 19,
+    const config = TILE_SERVERS[mapTheme];
+    const newTileLayer = L.tileLayer(config.url, {
+      maxZoom: config.maxZoom,
+      subdomains: config.subdomains,
     }).addTo(map);
+
+    (map as any)._currentTileLayer = newTileLayer;
+
+    setTimeout(() => {
+      map.invalidateSize();
+    }, 100);
   }, [mapTheme]);
 
-  // 3. Render Clean Custom Markers on Map
+  // 3. Render Custom Leaflet Markers
   useEffect(() => {
     if (!mapInstanceRef.current || !markersLayerRef.current) return;
     const markersLayer = markersLayerRef.current;
     markersLayer.clearLayers();
 
-    // Clean Marker Generator without glowing rings
-    const createCustomIcon = (type: 'SOS' | 'INCIDENT' | 'SHELTER' | 'HOSPITAL' | 'RELIEF', item: any) => {
+    const createCustomIcon = (type: string, item: any) => {
       let html = '';
       if (type === 'SOS') {
-        const isCritical = item.severity === 'CRITICAL';
         html = `
           <div class="relative flex items-center justify-center cursor-pointer">
-            <div class="w-7 h-7 rounded-full ${isCritical ? 'bg-red-600' : 'bg-amber-600'} text-white flex items-center justify-center text-xs font-bold shadow-md border-2 border-white">
+            <span class="absolute w-8 h-8 rounded-full bg-red-500/40 animate-ping"></span>
+            <div class="w-7 h-7 rounded-full bg-[#c0392b] text-white flex items-center justify-center text-xs font-bold shadow-lg border-2 border-white">
               🚨
             </div>
-            <span class="absolute -bottom-4 bg-slate-900 text-red-300 text-[9px] font-mono px-1 rounded border border-slate-700 whitespace-nowrap font-bold">
-              ${(item.id || item.message_id || 'SOS').slice(0, 7)}
+            <span class="absolute -bottom-4 bg-[#112e5a] text-red-200 text-[9px] font-mono px-1 rounded border border-red-500 whitespace-nowrap font-bold">
+              ${item.message_id ? item.message_id.slice(-6) : 'SOS'}
             </span>
           </div>
         `;
       } else if (type === 'INCIDENT') {
-        const iconSymbol = item.type === 'FLOOD' ? '🌊' : item.type === 'FIRE' ? '🔥' : '⚠️';
         html = `
           <div class="relative flex items-center justify-center cursor-pointer">
-            <div class="w-7 h-7 rounded-lg bg-amber-600 text-white flex items-center justify-center text-xs font-bold shadow-md border-2 border-white">
-              ${iconSymbol}
+            <div class="w-7 h-7 rounded-lg bg-[#d68910] text-white flex items-center justify-center text-xs font-bold shadow-md border-2 border-white">
+              ⚠️
             </div>
-            <span class="absolute -bottom-4 bg-slate-900 text-amber-300 text-[9px] font-mono px-1 rounded border border-slate-700 whitespace-nowrap font-bold">
-              ${item.type || 'Hazard'}
+            <span class="absolute -bottom-4 bg-[#112e5a] text-amber-200 text-[9px] font-mono px-1 rounded border border-amber-500 whitespace-nowrap font-bold">
+              ${item.type || 'HAZARD'}
             </span>
           </div>
         `;
       } else if (type === 'SHELTER') {
+        const cap = item.capacity || item.total_capacity || 100;
+        const occ = item.occupied || 0;
+        const free = Math.max(0, cap - occ);
         html = `
           <div class="relative flex items-center justify-center cursor-pointer">
-            <div class="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center text-xs font-bold shadow-md border-2 border-white">
+            <div class="w-7 h-7 rounded-lg bg-[#1e7e34] text-white flex items-center justify-center text-xs font-bold shadow-md border-2 border-white">
               🏠
             </div>
-            <span class="absolute -bottom-4 bg-slate-900 text-emerald-300 text-[9px] font-mono px-1 rounded border border-slate-700 whitespace-nowrap font-bold">
-              ${item.available_capacity || (item.capacity - (item.occupied || 0)) || 'Shelter'} Free
+            <span class="absolute -bottom-4 bg-[#112e5a] text-emerald-200 text-[9px] font-mono px-1 rounded border border-emerald-500 whitespace-nowrap font-bold">
+              ${free} Free
             </span>
           </div>
         `;
       } else if (type === 'HOSPITAL') {
         html = `
           <div class="relative flex items-center justify-center cursor-pointer">
-            <div class="w-7 h-7 rounded-lg bg-cyan-600 text-white flex items-center justify-center text-xs font-bold shadow-md border-2 border-white">
+            <div class="w-7 h-7 rounded-lg bg-[#1a4480] text-white flex items-center justify-center text-xs font-bold shadow-md border-2 border-white">
               🏥
             </div>
-            <span class="absolute -bottom-4 bg-slate-900 text-cyan-300 text-[9px] font-mono px-1 rounded border border-slate-700 whitespace-nowrap font-bold">
+            <span class="absolute -bottom-4 bg-[#112e5a] text-cyan-200 text-[9px] font-mono px-1 rounded border border-cyan-500 whitespace-nowrap font-bold">
               ICU: ${item.icu_available ?? item.icuAvailable ?? 0}
             </span>
           </div>
@@ -262,10 +288,10 @@ export function TacticalGISMap({
       } else if (type === 'RELIEF') {
         html = `
           <div class="relative flex items-center justify-center cursor-pointer">
-            <div class="w-7 h-7 rounded-lg bg-purple-600 text-white flex items-center justify-center text-xs font-bold shadow-md border-2 border-white">
+            <div class="w-7 h-7 rounded-lg bg-indigo-700 text-white flex items-center justify-center text-xs font-bold shadow-md border-2 border-white">
               📦
             </div>
-            <span class="absolute -bottom-4 bg-slate-900 text-purple-300 text-[9px] font-mono px-1 rounded border border-slate-700 whitespace-nowrap font-bold">
+            <span class="absolute -bottom-4 bg-[#112e5a] text-indigo-200 text-[9px] font-mono px-1 rounded border border-indigo-500 whitespace-nowrap font-bold">
               Depot
             </span>
           </div>
@@ -280,7 +306,7 @@ export function TacticalGISMap({
       });
     };
 
-    // A. Plot SOS
+    // Plot Layers
     if (activeLayer === 'ALL' || activeLayer === 'SOS') {
       sosList.forEach((sos) => {
         if (sos.latitude && sos.longitude) {
@@ -293,7 +319,6 @@ export function TacticalGISMap({
       });
     }
 
-    // B. Plot Incidents
     if (activeLayer === 'ALL' || activeLayer === 'INCIDENTS') {
       incidents.forEach((inc) => {
         if (inc.latitude && inc.longitude) {
@@ -306,7 +331,6 @@ export function TacticalGISMap({
       });
     }
 
-    // C. Plot Shelters
     if (activeLayer === 'ALL' || activeLayer === 'SHELTERS') {
       shelters.forEach((sh) => {
         if (sh.latitude && sh.longitude) {
@@ -319,7 +343,6 @@ export function TacticalGISMap({
       });
     }
 
-    // D. Plot Hospitals
     if (activeLayer === 'ALL' || activeLayer === 'HOSPITALS') {
       hospitals.forEach((hosp) => {
         if (hosp.latitude && hosp.longitude) {
@@ -332,7 +355,6 @@ export function TacticalGISMap({
       });
     }
 
-    // E. Plot Relief Centers
     if (activeLayer === 'ALL' || activeLayer === 'RELIEF') {
       reliefCenters.forEach((rc) => {
         if (rc.latitude && rc.longitude) {
@@ -351,274 +373,178 @@ export function TacticalGISMap({
     mapInstanceRef.current.flyTo(initialCenter, zoom, { duration: 1 });
   };
 
-  const totalCount = sosList.length + incidents.length + shelters.length + hospitals.length;
+  const totalCount = sosList.length + incidents.length + shelters.length + hospitals.length + reliefCenters.length;
 
   return (
-    <div className="bg-[#0F1E36] border border-slate-800 rounded-2xl overflow-hidden shadow-xl flex flex-col space-y-0">
+    <div 
+      className="section-card overflow-hidden shadow-sm flex flex-col w-full h-full"
+      style={height ? { height } : undefined}
+    >
       
       {/* Top Map Action & Filter Bar */}
-      <div className="bg-[#07111E] border-b border-slate-800 px-4 py-3 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-blue-950 border border-blue-800 flex items-center justify-center text-blue-400">
-            <Compass className="w-4 h-4" />
+      <div className="bg-gov-gray-bg dark:bg-slate-900/90 border-b border-gov-gray-border dark:border-slate-800 px-3.5 py-2 flex flex-wrap items-center justify-between gap-2.5 shrink-0 select-none z-10">
+        <div className="flex items-center gap-2">
+          <div className="w-6 h-6 rounded bg-gov-blue-faint dark:bg-slate-800 border border-gov-blue-pale dark:border-slate-700 flex items-center justify-center text-gov-blue dark:text-blue-400 shrink-0">
+            <Compass className="w-3.5 h-3.5" />
           </div>
           <div>
-            <h2 className="text-sm font-bold text-white flex items-center gap-2">
-              <span>Tactical GIS Geointel Map</span>
-              <span className="text-[10px] bg-emerald-950 text-emerald-400 border border-emerald-800 px-2 py-0.2 rounded-full font-mono font-bold">
-                LIVE GIS
+            <div className="flex items-center gap-1.5">
+              <h2 className="text-[11px] font-bold text-gov-blue-dark dark:text-white uppercase tracking-wider">
+                Tactical GIS Situation Map
+              </h2>
+              <span className="gov-badge badge-online text-[9px] font-mono px-1.5 py-0">
+                LIVE GIS ({totalCount})
               </span>
-            </h2>
-            <p className="text-[11px] text-slate-400">
-              Live spatial coordinates of distress signals, relief hubs, and hospital capacities.
-            </p>
+            </div>
           </div>
         </div>
 
-        {/* Quick Layer Filter Buttons with Real Live Numbers */}
-        <div className="flex items-center flex-wrap gap-1.5 bg-[#0F1E36] p-1 rounded-xl border border-slate-800 text-xs">
+        {/* Layer Filter Tabs */}
+        <div className="flex items-center flex-wrap gap-1 text-[11px]">
           <button
             onClick={() => setActiveLayer('ALL')}
-            className={`px-2.5 py-1 rounded-lg font-bold transition cursor-pointer ${
-              activeLayer === 'ALL' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'
-            }`}
+            className={`gov-btn btn-sm py-0.5 px-2 ${activeLayer === 'ALL' ? 'btn-primary' : 'btn-ghost'}`}
           >
             All ({totalCount})
           </button>
           <button
             onClick={() => setActiveLayer('SOS')}
-            className={`px-2.5 py-1 rounded-lg font-bold transition flex items-center gap-1 cursor-pointer ${
-              activeLayer === 'SOS' ? 'bg-red-600 text-white' : 'text-red-400 hover:bg-red-950/40'
-            }`}
+            className={`gov-btn btn-sm py-0.5 px-2 ${activeLayer === 'SOS' ? 'btn-secondary text-severity-critical' : 'btn-ghost text-severity-critical'}`}
           >
-            <span>🚨 SOS</span>
-            <span className="font-mono text-[10px]">({sosList.length})</span>
+            🚨 SOS ({sosList.length})
           </button>
           <button
             onClick={() => setActiveLayer('INCIDENTS')}
-            className={`px-2.5 py-1 rounded-lg font-bold transition flex items-center gap-1 cursor-pointer ${
-              activeLayer === 'INCIDENTS' ? 'bg-amber-600 text-white' : 'text-amber-400 hover:bg-amber-950/40'
-            }`}
+            className={`gov-btn btn-sm py-0.5 px-2 ${activeLayer === 'INCIDENTS' ? 'btn-secondary text-severity-high' : 'btn-ghost text-severity-high'}`}
           >
-            <span>⚠️ Incidents</span>
-            <span className="font-mono text-[10px]">({incidents.length})</span>
+            ⚠️ Incidents ({incidents.length})
           </button>
           <button
             onClick={() => setActiveLayer('SHELTERS')}
-            className={`px-2.5 py-1 rounded-lg font-bold transition flex items-center gap-1 cursor-pointer ${
-              activeLayer === 'SHELTERS' ? 'bg-emerald-600 text-white' : 'text-emerald-400 hover:bg-emerald-950/40'
-            }`}
+            className={`gov-btn btn-sm py-0.5 px-2 ${activeLayer === 'SHELTERS' ? 'btn-secondary text-status-online' : 'btn-ghost text-status-online'}`}
           >
-            <span>🏠 Shelters</span>
-            <span className="font-mono text-[10px]">({shelters.length})</span>
+            🏠 Shelters ({shelters.length})
           </button>
           <button
             onClick={() => setActiveLayer('HOSPITALS')}
-            className={`px-2.5 py-1 rounded-lg font-bold transition flex items-center gap-1 cursor-pointer ${
-              activeLayer === 'HOSPITALS' ? 'bg-cyan-600 text-white' : 'text-cyan-400 hover:bg-cyan-950/40'
-            }`}
+            className={`gov-btn btn-sm py-0.5 px-2 ${activeLayer === 'HOSPITALS' ? 'btn-secondary text-gov-blue' : 'btn-ghost text-gov-blue'}`}
           >
-            <span>🏥 Hospitals</span>
-            <span className="font-mono text-[10px]">({hospitals.length})</span>
+            🏥 Hospitals ({hospitals.length})
+          </button>
+          <button
+            onClick={() => setActiveLayer('RELIEF')}
+            className={`gov-btn btn-sm py-0.5 px-2 ${activeLayer === 'RELIEF' ? 'btn-secondary text-indigo-600' : 'btn-ghost text-indigo-600'}`}
+          >
+            📦 Relief ({reliefCenters.length})
           </button>
         </div>
 
-        {/* Map Controls */}
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setMapTheme(mapTheme === 'STREET' ? 'DARK' : 'STREET')}
-            title="Toggle Map Basemap"
-            className="px-2.5 py-1 bg-[#0F1E36] hover:bg-slate-800 border border-slate-700 text-slate-300 rounded-lg text-xs font-mono transition cursor-pointer"
-          >
-            {mapTheme === 'STREET' ? '🌙 Dark Grid' : '☀️ Street Grid'}
-          </button>
+        {/* Basemap Switcher (Google Maps / Google Satellite / Dark Grid / OpenStreetMap) */}
+        <div className="flex items-center gap-1">
+          <div className="inline-flex rounded border border-gov-gray-border dark:border-slate-700 bg-white dark:bg-slate-800 p-0.5 text-[10px]">
+            <button
+              onClick={() => setMapTheme('GOOGLE_STREET')}
+              className={`px-1.5 py-0.5 rounded font-bold transition cursor-pointer ${
+                mapTheme === 'GOOGLE_STREET' 
+                  ? 'bg-gov-blue text-white shadow-xs' 
+                  : 'text-gov-gray hover:text-gov-blue-dark dark:hover:text-white'
+              }`}
+              title="Google Maps with all place names, landmarks, colleges, and roads"
+            >
+              🗺️ Google Maps
+            </button>
+            <button
+              onClick={() => setMapTheme('GOOGLE_HYBRID')}
+              className={`px-1.5 py-0.5 rounded font-bold transition cursor-pointer ${
+                mapTheme === 'GOOGLE_HYBRID' 
+                  ? 'bg-gov-blue text-white shadow-xs' 
+                  : 'text-gov-gray hover:text-gov-blue-dark dark:hover:text-white'
+              }`}
+              title="Google Satellite with location names and road labels"
+            >
+              🛰️ Satellite + Names
+            </button>
+            <button
+              onClick={() => setMapTheme('DARK')}
+              className={`px-1.5 py-0.5 rounded font-bold transition cursor-pointer ${
+                mapTheme === 'DARK' 
+                  ? 'bg-gov-blue text-white shadow-xs' 
+                  : 'text-gov-gray hover:text-gov-blue-dark dark:hover:text-white'
+              }`}
+              title="Tactical Dark Matter Grid"
+            >
+              🌙 Dark
+            </button>
+            <button
+              onClick={() => setMapTheme('OSM')}
+              className={`px-1.5 py-0.5 rounded font-bold transition cursor-pointer ${
+                mapTheme === 'OSM' 
+                  ? 'bg-gov-blue text-white shadow-xs' 
+                  : 'text-gov-gray hover:text-gov-blue-dark dark:hover:text-white'
+              }`}
+              title="OpenStreetMap Standard"
+            >
+              📍 OSM
+            </button>
+          </div>
+
           <button
             onClick={centerOnAll}
-            title="Recenter Map"
-            className="p-1.5 bg-[#0F1E36] hover:bg-slate-800 border border-slate-700 text-slate-300 rounded-lg transition cursor-pointer"
+            className="gov-btn btn-ghost btn-sm p-1 cursor-pointer"
+            title="Recenter Map Coordinates"
           >
-            <Crosshair className="w-4 h-4 text-blue-400" />
+            <Crosshair className="w-3 h-3 text-gov-blue" />
           </button>
           <button
             onClick={loadGISData}
-            title="Refresh GIS Feeds"
-            className="p-1.5 bg-[#0F1E36] hover:bg-slate-800 border border-slate-700 text-slate-300 rounded-lg transition cursor-pointer"
+            className="gov-btn btn-ghost btn-sm p-1 cursor-pointer"
+            title="Refresh Map Feeds"
           >
-            <RefreshCw className={`w-4 h-4 text-emerald-400 ${isLoading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-3 h-3 ${isLoading ? 'animate-spin' : ''}`} />
           </button>
         </div>
       </div>
 
-      {/* Main Map Body Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 relative" style={{ minHeight: height }}>
-        
-        {/* Leaflet Map Canvas */}
-        <div className="lg:col-span-3 relative h-full min-h-[480px]">
-          <div ref={mapContainerRef} className="w-full h-full" style={{ height: '100%', minHeight: '480px' }} />
+      {/* Map Canvas Area */}
+      <div className="flex-1 w-full min-h-0 relative">
+        <div ref={mapContainerRef} className="w-full h-full z-0" />
 
-          {/* Coordinate HUD overlay */}
-          <div className="absolute top-3 left-3 bg-[#07111E]/95 border border-slate-800 rounded-xl px-3 py-2 text-[10px] text-slate-300 font-mono space-y-0.5 shadow-lg pointer-events-none z-[1000]">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-              <span className="font-bold text-white">GRID: SECTOR 4 NORTH</span>
-            </div>
-            <div className="text-slate-400">
-              LAT: {initialCenter[0].toFixed(4)}° N • LON: {initialCenter[1].toFixed(4)}° E
-            </div>
-          </div>
-        </div>
-
-        {/* Right Sidebar: Active Live Emergency Feed & Entity Inspector */}
-        <div className="bg-[#07111E] border-t lg:border-t-0 lg:border-l border-slate-800 p-4 flex flex-col justify-between overflow-y-auto max-h-[620px]">
-          {selectedEntity ? (
-            <div className="space-y-4">
-              <div className="pb-3 border-b border-slate-800 flex items-center justify-between">
-                <button
-                  onClick={() => setSelectedEntity(null)}
-                  className="text-xs text-cyan-400 hover:text-cyan-300 font-bold flex items-center gap-1 cursor-pointer font-mono"
-                >
-                  ← Back to Live Stream
-                </button>
-                <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400">
+        {/* Selected Entity Inspector Overlay */}
+        {selectedEntity && (
+          <div className="absolute top-3 right-3 z-20 w-80 bg-white/95 dark:bg-[#151e2e]/95 backdrop-blur-sm border border-gov-gray-border dark:border-slate-800 rounded-lg p-3.5 shadow-2xl space-y-2.5 text-xs">
+            <div className="flex items-center justify-between border-b border-gov-gray-border dark:border-slate-800 pb-2">
+              <div className="flex items-center gap-1.5">
+                <span className="gov-badge badge-resolved font-mono font-bold text-[10px]">
                   {selectedEntity.type}
                 </span>
-              </div>
-
-              <div>
-                <h4 className="text-sm font-bold text-white">
-                  {selectedEntity.data.name || selectedEntity.data.title || selectedEntity.data.message || 'Entity Details'}
+                <h4 className="font-bold text-[#1e2533] dark:text-white truncate max-w-[180px]">
+                  {selectedEntity.data.name || selectedEntity.data.title || selectedEntity.data.message_id || selectedEntity.data.id}
                 </h4>
-                <p className="text-xs text-slate-400 mt-1 font-mono">
-                  {selectedEntity.data.address || selectedEntity.data.description || 'Disaster Resource Node'}
-                </p>
               </div>
+              <button 
+                onClick={() => setSelectedEntity(null)}
+                className="text-gov-gray hover:text-[#1e2533] dark:hover:text-white cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
 
-              <div className="bg-[#0F1E36] p-3 rounded-xl border border-slate-800 space-y-1.5 text-xs font-mono">
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Latitude:</span>
-                  <span className="text-white">{Number(selectedEntity.data.latitude || 0).toFixed(5)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Longitude:</span>
-                  <span className="text-white">{Number(selectedEntity.data.longitude || 0).toFixed(5)}</span>
-                </div>
-                {selectedEntity.data.severity && (
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Severity:</span>
-                    <span className="text-red-400 font-bold">{selectedEntity.data.severity}</span>
-                  </div>
-                )}
-                {selectedEntity.data.status && (
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Status:</span>
-                    <span className="text-emerald-400 font-bold">{selectedEntity.data.status}</span>
-                  </div>
-                )}
-                {(selectedEntity.data.user_name || selectedEntity.data.user_phone) && (
-                  <div className="pt-2 border-t border-slate-700/60 space-y-1">
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">Citizen:</span>
-                      <span className="text-slate-200">{selectedEntity.data.user_name || 'Citizen'}</span>
-                    </div>
-                    {selectedEntity.data.user_phone && (
-                      <div className="flex justify-between">
-                        <span className="text-slate-400">Phone:</span>
-                        <span className="text-emerald-400">{selectedEntity.data.user_phone}</span>
-                      </div>
-                    )}
-                  </div>
-                )}
+            <p className="text-xs text-gov-gray-dark dark:text-slate-200">
+              {selectedEntity.data.description || selectedEntity.data.message || selectedEntity.data.address}
+            </p>
+
+            <div className="grid grid-cols-2 gap-2 text-[11px] font-mono">
+              <div className="p-2 bg-gov-gray-bg dark:bg-slate-900 rounded">
+                <span className="text-gov-gray block text-[9px] uppercase">Latitude</span>
+                <span className="font-bold text-gov-blue">{selectedEntity.data.latitude?.toFixed(5)}</span>
               </div>
-
-              <div className="space-y-2 pt-2 border-t border-slate-800">
-                <a
-                  href={`https://maps.google.com/?q=${selectedEntity.data.latitude},${selectedEntity.data.longitude}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full py-2 bg-[#0F1E36] hover:bg-slate-800 border border-cyan-800/60 text-cyan-300 rounded-xl text-xs font-mono font-bold flex items-center justify-center gap-1.5 transition"
-                >
-                  <MapPin className="w-3.5 h-3.5" />
-                  <span>Open in Google Maps</span>
-                </a>
+              <div className="p-2 bg-gov-gray-bg dark:bg-slate-900 rounded">
+                <span className="text-gov-gray block text-[9px] uppercase">Longitude</span>
+                <span className="font-bold text-gov-blue">{selectedEntity.data.longitude?.toFixed(5)}</span>
               </div>
             </div>
-          ) : (
-            <div className="space-y-3">
-              <div className="pb-2 border-b border-slate-800 flex items-center justify-between">
-                <h4 className="text-xs font-bold text-white flex items-center gap-1.5 font-mono">
-                  <ShieldAlert className="w-3.5 h-3.5 text-red-400" />
-                  <span>Live Tactical Stream</span>
-                </h4>
-                <span className="text-[10px] bg-red-950 text-red-400 border border-red-800 px-1.5 py-0.2 rounded font-mono font-bold">
-                  {sosList.length + incidents.length} Signals
-                </span>
-              </div>
-
-              <p className="text-[11px] text-slate-400 font-mono">
-                Click any distress alert below to focus and inspect on map:
-              </p>
-
-              <div className="space-y-2 overflow-y-auto max-h-[500px] pr-1">
-                {/* 1. SOS alerts */}
-                {sosList.slice(0, 20).map((sos) => (
-                  <div
-                    key={sos.id || sos.message_id}
-                    onClick={() => {
-                      setSelectedEntity({ type: 'SOS', data: sos });
-                      if (mapInstanceRef.current && sos.latitude && sos.longitude) {
-                        mapInstanceRef.current.flyTo([sos.latitude, sos.longitude], 15, { duration: 0.8 });
-                      }
-                    }}
-                    className="p-2.5 bg-[#0F1E36] hover:bg-slate-800 border border-slate-800 hover:border-red-600/60 rounded-xl cursor-pointer transition space-y-1.5"
-                  >
-                    <div className="flex items-center justify-between text-[10px] font-mono">
-                      <span className="px-1.5 py-0.2 rounded bg-red-950 text-red-400 border border-red-800 font-bold">
-                        🚨 SOS • {sos.severity || 'CRITICAL'}
-                      </span>
-                      <span className="text-slate-400">{sos.status || 'ACTIVE'}</span>
-                    </div>
-                    <p className="text-xs text-white font-bold line-clamp-2">
-                      {sos.message || 'Emergency distress beacon'}
-                    </p>
-                    <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono pt-1 border-t border-slate-800/60">
-                      <span>GPS: {Number(sos.latitude || 0).toFixed(4)}, {Number(sos.longitude || 0).toFixed(4)}</span>
-                      <span className="text-cyan-400 font-bold">Inspect →</span>
-                    </div>
-                  </div>
-                ))}
-
-                {/* 2. Incidents */}
-                {incidents.slice(0, 10).map((inc) => (
-                  <div
-                    key={inc.id}
-                    onClick={() => {
-                      setSelectedEntity({ type: 'INCIDENT', data: inc });
-                      if (mapInstanceRef.current && inc.latitude && inc.longitude) {
-                        mapInstanceRef.current.flyTo([inc.latitude, inc.longitude], 15, { duration: 0.8 });
-                      }
-                    }}
-                    className="p-2.5 bg-[#0F1E36] hover:bg-slate-800 border border-slate-800 hover:border-amber-600/60 rounded-xl cursor-pointer transition space-y-1.5"
-                  >
-                    <div className="flex items-center justify-between text-[10px] font-mono">
-                      <span className="px-1.5 py-0.2 rounded bg-amber-950 text-amber-400 border border-amber-800 font-bold">
-                        ⚠️ {inc.type || 'HAZARD'}
-                      </span>
-                      <span className="text-slate-400">{inc.status || 'REPORTED'}</span>
-                    </div>
-                    <p className="text-xs text-white font-bold line-clamp-2">
-                      {inc.title || inc.description}
-                    </p>
-                    <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono pt-1 border-t border-slate-800/60">
-                      <span>GPS: {Number(inc.latitude || 0).toFixed(4)}, {Number(inc.longitude || 0).toFixed(4)}</span>
-                      <span className="text-amber-400 font-bold">Inspect →</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-
+          </div>
+        )}
       </div>
 
     </div>

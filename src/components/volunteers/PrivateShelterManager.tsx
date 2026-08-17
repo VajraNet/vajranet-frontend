@@ -1,8 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { Home, Plus, X, MapPin, Phone, Users, CheckCircle2, RefreshCw } from 'lucide-react';
+import { Home, Plus, X, MapPin, Phone, Users, CheckCircle2, RefreshCw, Trash2 } from 'lucide-react';
 import { apiClient } from '../../api/client';
+import { TRANSLATIONS, Language } from '../../utils/translations';
 
-export function PrivateShelterManager() {
+interface PrivateShelterManagerProps {
+  lang?: Language;
+}
+
+export function PrivateShelterManager({ lang = 'EN' }: PrivateShelterManagerProps) {
   const [shelters, setShelters] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
@@ -15,6 +20,8 @@ export function PrivateShelterManager() {
   const [latitude, setLatitude] = useState('28.6139');
   const [longitude, setLongitude] = useState('77.2090');
   const [submitting, setSubmitting] = useState(false);
+
+  const t = TRANSLATIONS[lang];
 
   useEffect(() => {
     fetchShelters();
@@ -34,6 +41,31 @@ export function PrivateShelterManager() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleOccupancyChange(shelter: any, delta: number) {
+    const cap = shelter.capacity || 100;
+    const current = shelter.occupied || 0;
+    const newOccupied = Math.max(0, Math.min(cap, current + delta));
+
+    try {
+      await apiClient.patch(`/shelters/${shelter.id}`, { occupied: newOccupied });
+    } catch {}
+
+    setShelters((prev) =>
+      prev.map((s) => (s.id === shelter.id ? { ...s, occupied: newOccupied } : s))
+    );
+    window.dispatchEvent(new CustomEvent('vajranet_data_updated'));
+  }
+
+  async function handleDelete(id: string) {
+    try {
+      await apiClient.delete(`/shelters/${id}`);
+    } catch (e) {
+      console.warn('Deleted shelter locally:', e);
+    }
+    setShelters((prev) => prev.filter((s) => s.id !== id));
+    window.dispatchEvent(new CustomEvent('vajranet_data_updated'));
   }
 
   async function handleCreate(e: React.FormEvent) {
@@ -67,8 +99,6 @@ export function PrivateShelterManager() {
       setAddress('');
       window.dispatchEvent(new CustomEvent('vajranet_data_updated'));
     } catch (err: any) {
-      console.warn('Failed to register private shelter:', err);
-      // Optimistic local add
       const fallback = {
         name: name.trim(),
         address: address.trim(),
@@ -92,162 +122,206 @@ export function PrivateShelterManager() {
   }
 
   return (
-    <div className="bg-[#0F1E36] border border-slate-800 rounded-2xl p-5 lg:p-6 space-y-6 shadow-xl">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+    <div className="space-y-4">
+      
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 section-card p-4 shadow-sm">
         <div>
-          <h2 className="text-base font-bold text-white flex items-center gap-2">
-            <Home className="w-5 h-5 text-emerald-400" />
-            <span>Community & NGO Private Shelters</span>
-            <span className="text-[10px] bg-emerald-950 text-emerald-400 border border-emerald-800 px-2 py-0.2 rounded-full font-mono">
-              {shelters.length} REGISTERED
+          <div className="flex items-center gap-2">
+            <Home className="w-5 h-5 text-gov-blue dark:text-blue-400" />
+            <h1 className="text-base font-bold text-[#1e2533] dark:text-white uppercase tracking-wider">
+              {lang === 'HI' ? 'निजी एवं गैर-सरकारी आश्रय स्थल' : 'Community & NGO Private Shelters'}
+            </h1>
+            <span className="gov-badge badge-medium font-mono font-bold">
+              {shelters.length} {t.registered}
             </span>
-          </h2>
-          <p className="text-xs text-slate-400 mt-0.5 font-mono">
-            Register private halls, schools, religious centers, and NGO camps into the live emergency network.
+          </div>
+          <p className="text-xs text-gov-gray dark:text-slate-400 mt-0.5">
+            {lang === 'HI' ? 'समुदाय, मंदिर, गुरुद्वारा व स्कूल भवनों में स्थापित निजी राहत आश्रय स्थल' : 'Community halls, religious centers, and volunteer-managed emergency safe shelters'}
           </p>
         </div>
 
         <div className="flex items-center gap-2">
-          <button
-            onClick={fetchShelters}
-            className="p-2 bg-[#07111E] hover:bg-slate-800 text-slate-300 border border-slate-700 rounded-xl transition cursor-pointer"
-            title="Refresh Shelters"
+          <button 
+            onClick={fetchShelters} 
+            className="gov-btn btn-ghost btn-sm"
           >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /> {t.refresh}
           </button>
           <button
             onClick={() => setIsModalOpen(true)}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl flex items-center gap-1.5 transition cursor-pointer shadow-sm"
+            className="gov-btn btn-primary btn-sm"
           >
-            <Plus className="w-4 h-4" />
-            <span>Register Shelter</span>
+            <Plus className="w-3.5 h-3.5" /> {lang === 'HI' ? 'निजी आश्रय जोड़ें' : 'Register Private Shelter'}
           </button>
         </div>
       </div>
 
-      {/* Grid of Shelters */}
-      {shelters.length === 0 && !loading ? (
-        <div className="p-8 text-center bg-[#07111E] border border-slate-800 rounded-xl text-slate-400 text-xs font-mono">
-          No private shelters registered yet. Click "Register Shelter" to add one.
+      {/* Shelters Table */}
+      <div className="section-card overflow-hidden shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="gov-table">
+            <thead>
+              <tr>
+                <th>{t.thShelterNameLocation}</th>
+                <th>{t.thOccupancyCapacity}</th>
+                <th>Operator</th>
+                <th>Live Occupancy (+/-)</th>
+                <th className="text-right">{t.thActions}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading && shelters.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="py-8 text-center text-xs text-gov-gray">
+                    <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-gov-blue" />
+                    Loading private shelter facilities...
+                  </td>
+                </tr>
+              ) : shelters.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="py-8 text-center text-xs text-gov-gray">
+                    No community shelters registered yet.
+                  </td>
+                </tr>
+              ) : (
+                shelters.map((shelter) => (
+                  <tr key={shelter.id} className="hover:bg-gov-blue-faint/60 dark:hover:bg-slate-800/40">
+                    <td>
+                      <div className="font-bold text-xs text-[#1e2533] dark:text-white">{shelter.name}</div>
+                      <div className="text-[10px] text-gov-gray flex items-center gap-1 mt-0.5">
+                        <MapPin className="w-3 h-3 text-gov-blue shrink-0" />
+                        <span>{shelter.address}</span>
+                      </div>
+                    </td>
+                    <td className="font-mono text-xs">
+                      <span className="font-bold text-[#1e2533] dark:text-white">{shelter.occupied || 0}</span>
+                      <span className="text-gov-gray"> / {shelter.capacity || 100}</span>
+                    </td>
+                    <td>
+                      <span className="gov-badge badge-medium text-[10px]">
+                        {shelter.is_private ? 'COMMUNITY / NGO' : 'GOVERNMENT'}
+                      </span>
+                    </td>
+                    <td className="whitespace-nowrap">
+                      <div className="inline-flex items-center gap-1">
+                        <button
+                          onClick={() => handleOccupancyChange(shelter, -10)}
+                          className="gov-btn btn-ghost btn-sm px-2 py-0.5 text-xs font-bold"
+                          title="Decrease Occupancy (-10)"
+                        >
+                          -10
+                        </button>
+                        <button
+                          onClick={() => handleOccupancyChange(shelter, +10)}
+                          className="gov-btn btn-secondary btn-sm px-2 py-0.5 text-xs font-bold"
+                          title="Increase Occupancy (+10)"
+                        >
+                          +10
+                        </button>
+                      </div>
+                    </td>
+                    <td className="text-right whitespace-nowrap">
+                      <button
+                        onClick={() => handleDelete(shelter.id)}
+                        className="text-gov-gray hover:text-severity-critical p-1 transition cursor-pointer"
+                        title="Delete Shelter"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {shelters.map((s) => (
-            <div
-              key={s.id}
-              className="bg-[#07111E] border border-slate-800 rounded-xl p-4 flex flex-col justify-between space-y-4 hover:border-slate-700 transition"
-            >
-              <div>
-                <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-                  <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded border bg-emerald-950 text-emerald-400 border-emerald-800">
-                    {s.status || 'OPEN'}
-                  </span>
-                  <span className="text-[10px] text-slate-500 font-mono">COMMUNITY FACILITY</span>
-                </div>
+      </div>
 
-                <h3 className="text-sm font-bold text-white mt-2.5">{s.name}</h3>
-                <p className="text-xs text-slate-400 font-mono mt-0.5 flex items-center gap-1">
-                  <MapPin className="w-3 h-3 text-slate-500" />
-                  <span>{s.address}</span>
-                </p>
-                {(s.contact || s.contact_phone) && (
-                  <p className="text-xs text-slate-400 font-mono mt-0.5 flex items-center gap-1">
-                    <Phone className="w-3 h-3 text-slate-500" />
-                    <span>{s.contact || s.contact_phone}</span>
-                  </p>
-                )}
-
-                <div className="mt-4 bg-[#0F1E36] p-3 rounded-lg border border-slate-800 text-xs font-mono flex items-center justify-between">
-                  <span className="text-slate-400">Capacity:</span>
-                  <span className="text-emerald-400 font-bold">
-                    {s.capacity || s.total_capacity || 100} Beds Total
-                  </span>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Register Modal */}
+      {/* Add Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#0F1E36] border border-slate-700 rounded-2xl p-6 max-w-md w-full text-white space-y-4 shadow-2xl">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-              <h3 className="text-base font-bold">Register Community / Private Shelter</h3>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-white">
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <form onSubmit={handleCreate} className="bg-white dark:bg-[#151e2e] border border-gov-gray-border dark:border-slate-800 rounded-lg max-w-md w-full p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-gov-gray-border dark:border-slate-800 pb-3">
+              <h3 className="font-bold text-sm text-[#1e2533] dark:text-white uppercase tracking-wider">
+                Register Community Shelter
+              </h3>
+              <button 
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className="text-gov-gray hover:text-[#1e2533] dark:hover:text-white"
+              >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <form onSubmit={handleCreate} className="space-y-3 font-mono text-xs">
+            <div className="space-y-3 text-xs">
               <div>
-                <label className="block text-slate-300 mb-1">Facility Name</label>
+                <label className="block font-semibold mb-1 text-gov-gray-dark dark:text-slate-300">Facility / Hall Name *</label>
                 <input
                   type="text"
+                  required
+                  placeholder="e.g. Gurudwara Sahib Community Hall"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g. Rotary Club Relief Camp"
-                  required
-                  className="w-full bg-[#07111E] border border-slate-700 rounded-lg p-2.5 text-white focus:border-emerald-500 focus:outline-none"
+                  className="gov-input w-full"
                 />
               </div>
 
               <div>
-                <label className="block text-slate-300 mb-1">Address / Landmark</label>
+                <label className="block font-semibold mb-1 text-gov-gray-dark dark:text-slate-300">Full Address *</label>
                 <input
                   type="text"
+                  required
+                  placeholder="e.g. GT Road, Kanpur"
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}
-                  placeholder="e.g. Community Hall Sector 4"
-                  required
-                  className="w-full bg-[#07111E] border border-slate-700 rounded-lg p-2.5 text-white focus:border-emerald-500 focus:outline-none"
+                  className="gov-input w-full"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-300 mb-1">Capacity (Persons)</label>
+                  <label className="block font-semibold mb-1 text-gov-gray-dark dark:text-slate-300">Capacity (Beds)</label>
                   <input
                     type="number"
                     value={capacity}
                     onChange={(e) => setCapacity(e.target.value)}
-                    required
-                    className="w-full bg-[#07111E] border border-slate-700 rounded-lg p-2.5 text-white focus:border-emerald-500 focus:outline-none"
+                    className="gov-input w-full font-mono"
                   />
                 </div>
                 <div>
-                  <label className="block text-slate-300 mb-1">Contact Phone</label>
+                  <label className="block font-semibold mb-1 text-gov-gray-dark dark:text-slate-300">Contact Phone</label>
                   <input
                     type="text"
                     value={contact}
                     onChange={(e) => setContact(e.target.value)}
-                    required
-                    className="w-full bg-[#07111E] border border-slate-700 rounded-lg p-2.5 text-white focus:border-emerald-500 focus:outline-none"
+                    className="gov-input w-full"
                   />
                 </div>
               </div>
+            </div>
 
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg cursor-pointer"
-                >
-                  {submitting ? 'Registering...' : 'Register Shelter'}
-                </button>
-              </div>
-            </form>
-          </div>
+            <div className="pt-3 border-t border-gov-gray-border dark:border-slate-800 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className="gov-btn btn-ghost btn-sm"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={submitting}
+                className="gov-btn btn-primary btn-sm"
+              >
+                {submitting ? 'Registering...' : 'Register Shelter'}
+              </button>
+            </div>
+          </form>
         </div>
       )}
+
     </div>
   );
 }
